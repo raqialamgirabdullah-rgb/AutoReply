@@ -24,7 +24,6 @@ import android.widget.ScrollView
 import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
-import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -56,17 +55,18 @@ class MainActivity : Activity() {
         return packageManager.getPackageInfo(packageName, 0).versionCode
     }
 
-    // GitHub-এর সর্বশেষ Release দেখে; ট্যাগের শেষ সংখ্যাই সংস্করণ নম্বর (v1.0.N)
+    // GitHub-এর "latest release" লিংক কোন ট্যাগে যায় সেটা দেখে (API নয়, তাই রেট লিমিটে আটকায় না);
+    // ট্যাগের শেষ সংখ্যাই সংস্করণ নম্বর (v1.0.N)
     private fun check(manual: Boolean) {
         Thread {
             try {
-                val cn = URL("https://api.github.com/repos/$repo/releases/latest").openConnection() as HttpURLConnection
-                cn.setRequestProperty("Accept", "application/vnd.github+json")
+                val cn = URL("https://github.com/$repo/releases/latest").openConnection() as HttpURLConnection
+                cn.instanceFollowRedirects = false
                 cn.connectTimeout = 10000
                 cn.readTimeout = 10000
-                val j = JSONObject(cn.inputStream.bufferedReader().use { it.readText() })
-                val v = j.getString("tag_name").substringAfterLast('.').toInt()
-                val url = j.getJSONArray("assets").getJSONObject(0).getString("browser_download_url")
+                val tag = (cn.getHeaderField("Location") ?: "").substringAfterLast('/')
+                val v = tag.substringAfterLast('.').toInt()
+                val url = "https://github.com/$repo/releases/download/$tag/AutoReply.apk"
                 val now = if (v > curVer()) Pair(v, url) else null
                 runOnUiThread {
                     val changed = now?.first != update?.first
