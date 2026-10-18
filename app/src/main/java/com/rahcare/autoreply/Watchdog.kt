@@ -47,6 +47,7 @@ object Watchdog {
 class WatchdogReceiver : BroadcastReceiver() {
     override fun onReceive(c: Context, i: Intent) {
         Watchdog.schedule(c)
+        Store.ev(c, "ওয়াচডগ জেগেছে: চালু=${Store.enabled(c)} সংযুক্ত=${ReplyService.connected}")
         if (Store.enabled(c)) {
             KeepAliveService.start(c)
             Watchdog.rebind(c, true)

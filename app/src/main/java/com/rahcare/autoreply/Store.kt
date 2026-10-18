@@ -86,6 +86,17 @@ object Store {
     fun catchInit(c: Context) = p(c).getBoolean("ci", false)
     fun setCatchInit(c: Context) = p(c).edit().putBoolean("ci", true).apply()
 
+    // ডায়াগনস্টিক ঘটনা-লগ (শেষ ৬০টা): প্রসেস শুরু, লিসেনার সংযোগ, সার্ভিস চালু/বন্ধ, নোটিফিকেশন আসা, উত্তর পাঠানো
+    @Synchronized
+    fun ev(c: Context, msg: String) {
+        try {
+            val t = java.text.SimpleDateFormat("dd HH:mm:ss", java.util.Locale.US).format(java.util.Date())
+            val l = (p(c).getString("ev", "") ?: "").split('\n').filter { it.isNotEmpty() }
+            p(c).edit().putString("ev", (l + "$t $msg").takeLast(60).joinToString("\n")).apply()
+        } catch (e: Exception) {}
+    }
+    fun events(c: Context) = p(c).getString("ev", "") ?: ""
+
     fun log(c: Context) = p(c).getString("log", "") ?: ""
     fun setLog(c: Context, v: String) = p(c).edit().putString("log", v).apply()
 

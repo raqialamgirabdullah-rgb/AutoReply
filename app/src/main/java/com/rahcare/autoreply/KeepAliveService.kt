@@ -29,23 +29,28 @@ class KeepAliveService : Service() {
         if (Build.VERSION.SDK_INT >= 34) startForeground(7, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
         else startForeground(7, n)
         Watchdog.schedule(this)
+        Store.ev(this, "KeepAlive চালু আছে")
         return START_STICKY
     }
 
     // রিসেন্টস থেকে সোয়াইপ করে সরালে বা ফোন সার্ভিস মেরে দিলে অ্যালার্ম দিয়ে আবার তোলা হয়
     override fun onTaskRemoved(rootIntent: Intent?) {
         super.onTaskRemoved(rootIntent)
+        Store.ev(this, "অ্যাপ রিসেন্টস থেকে সরানো হয়েছে")
         if (Store.enabled(this)) Watchdog.schedule(this, 3000L)
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        Store.ev(this, "KeepAlive বন্ধ হয়েছে")
         if (Store.enabled(this)) Watchdog.schedule(this, 5000L)
     }
 
     companion object {
         fun start(c: Context) {
-            try { c.startForegroundService(Intent(c, KeepAliveService::class.java)) } catch (e: Exception) {}
+            try { c.startForegroundService(Intent(c, KeepAliveService::class.java)) } catch (e: Exception) {
+                Store.ev(c, "KeepAlive চালু করা ব্যর্থ: ${e.javaClass.simpleName}")
+            }
         }
         fun stop(c: Context) {
             try { c.stopService(Intent(c, KeepAliveService::class.java)) } catch (e: Exception) {}

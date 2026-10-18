@@ -8,6 +8,7 @@ import android.content.Intent
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(c: Context, i: Intent) {
         if (i.action == Intent.ACTION_MY_PACKAGE_REPLACED) Updater.clearNotice(c)
+        Store.ev(c, "বুট/আপডেটে চালু: ${i.action}")
         Watchdog.schedule(c)
         if (!Store.enabled(c)) return
         KeepAliveService.start(c)

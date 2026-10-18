@@ -5,6 +5,7 @@ import android.app.RemoteInput
 import android.content.ComponentName
 import android.content.Intent
 import android.os.Bundle
+import android.os.PowerManager
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import java.text.SimpleDateFormat
@@ -26,12 +27,37 @@ class ReplyService : NotificationListenerService() {
         @Volatile var connected = false
     }
 
-    override fun onNotificationPosted(sbn: StatusBarNotification) = handle(sbn, false, false)
+    override fun onCreate() {
+        super.onCreate()
+        Store.ev(applicationContext, "ReplyService তৈরি (প্রসেস চালু)")
+    }
+
+    override fun onNotificationPosted(sbn: StatusBarNotification) {
+        val c = applicationContext
+        if (Store.family(sbn.packageName) != null) {
+            val ra = sbn.notification.actions?.any { a -> a.remoteInputs?.any { it.allowFreeFormInput } == true } == true
+            Store.ev(c, "নোটিফিকেশন এসেছে: ${sbn.packageName} reply-বাটন=$ra চালু=${Store.enabled(c)}")
+        }
+        // উত্তর পাঠানোর সময় সিপিইউ যেন ঘুমিয়ে না পড়ে
+        var wl: PowerManager.WakeLock? = null
+        try {
+            wl = getSystemService(PowerManager::class.java).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "autoreply:reply")
+            wl.acquire(15000L)
+        } catch (e: Exception) {}
+        try {
+            handle(sbn, false, false)
+        } catch (e: Exception) {
+            Store.ev(c, "handle ব্যর্থ: ${e.javaClass.simpleName} ${e.message}")
+        } finally {
+            try { if (wl != null && wl.isHeld) wl.release() } catch (e: Exception) {}
+        }
+    }
 
     // সিস্টেম সংযোগ কেটে দিলে নিজে থেকে আবার সংযোগ চায়
     override fun onListenerDisconnected() {
         super.onListenerDisconnected()
         connected = false
+        Store.ev(applicationContext, "লিসেনার বিচ্ছিন্ন হয়েছে")
         try { requestRebind(ComponentName(this, ReplyService::class.java)) } catch (e: Exception) {}
     }
 
@@ -40,6 +66,7 @@ class ReplyService : NotificationListenerService() {
         super.onListenerConnected()
         connected = true
         val c = applicationContext
+        Store.ev(c, "লিসেনার সংযুক্ত হয়েছে")
         // সিস্টেম লিসেনার জুড়লেই কিপ-অ্যালাইভ সার্ভিস ও ওয়াচডগও চালু (অ্যাপ খুলতে হবে না)
         Watchdog.schedule(c)
         if (Store.enabled(c)) KeepAliveService.start(c)
@@ -52,6 +79,7 @@ class ReplyService : NotificationListenerService() {
 
     override fun onDestroy() {
         connected = false
+        Store.ev(applicationContext, "ReplyService ধ্বংস হয়েছে")
         super.onDestroy()
     }
 
@@ -113,6 +141,7 @@ class ReplyService : NotificationListenerService() {
             if (sent.size > 50) sent.clear()
             sent.add(reply)
             val err = send(a, ris, ri, reply)
+            Store.ev(c, "উত্তর পাঠানোর ফল: " + (err ?: "সফল"))
             log(pkg, uid, sender, text, if (err == null) "উত্তর পাঠানো হয়েছে: $reply" else "পাঠাতে ব্যর্থ ($err)")
             return
         }

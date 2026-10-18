@@ -48,6 +48,7 @@ class MainActivity : Activity() {
     private var wantInstall = false             // আপডেট-নোটিফিকেশনে চেপে ঢুকলে সরাসরি ইনস্টল শুরু হবে
     private var statusTv: TextView? = null
     private var lastCheck = 0L
+    private var evBox: TextView? = null
 
     private val ink = Color.parseColor("#EAF2F3")
     private val mute = Color.parseColor("#8FA3A8")
@@ -64,6 +65,7 @@ class MainActivity : Activity() {
         override fun run() {
             fillLog()
             fillStatus()
+            fillEv()
             if (System.currentTimeMillis() - lastCheck > 5 * 60 * 1000L) refreshUpdate()
             handler.postDelayed(this, 3000)
         }
@@ -177,6 +179,7 @@ class MainActivity : Activity() {
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
         }
         Watchdog.schedule(this)
+        Store.ev(this, "অ্যাপ খোলা হয়েছে")
         if (Store.enabled(this)) KeepAliveService.start(this)
         Watchdog.rebind(this, false)
         update = Updater.saved(this)
@@ -259,6 +262,16 @@ class MainActivity : Activity() {
             ReplyService.connected -> Pair("✔ সংযুক্ত — ব্যাকগ্রাউন্ডে মেসেজের অপেক্ষায়", accent)
             else -> Pair("⚠ সংযোগ নেই — আবার জোড়ার চেষ্টা চলছে", warn)
         }
+    }
+
+    private fun evText(): String {
+        val head = "ফোন: ${Build.MANUFACTURER} ${Build.MODEL}, Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT}), সংস্করণ ${Updater.curVer(this)}\n" +
+            "অ্যাক্সেস=${granted()} চালু=${Store.enabled(this)} সংযুক্ত=${ReplyService.connected} ব্যাটারি-ছাড়=${getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(packageName)}\n"
+        return head + Store.events(this).split('\n').takeLast(30).joinToString("\n")
+    }
+
+    private fun fillEv() {
+        evBox?.text = evText()
     }
 
     private fun fillStatus() {
@@ -591,6 +604,21 @@ class MainActivity : Activity() {
             arow(i.pkg, i.uid, "শেষ নোটিফিকেশন " + fmt.format(Date(i.t)))
         }
         addSide(apps, 14)
+
+        // ডায়াগনস্টিক
+        val dg = card()
+        title(dg, "ডায়াগনস্টিক লগ", "অ্যাপ বন্ধ থাকলে কী ঘটছে তার রেকর্ড। সমস্যা হলে কপি করে পাঠান।")
+        val eb = tv("", 11f, mute)
+        eb.typeface = Typeface.MONOSPACE
+        addTo(dg, eb, 10)
+        evBox = eb
+        fillEv()
+        addTo(dg, ghost("কপি করুন") {
+            val cm = getSystemService(android.content.ClipboardManager::class.java)
+            cm.setPrimaryClip(android.content.ClipData.newPlainText("autoreply-log", evText()))
+            Toast.makeText(c, "কপি হয়েছে", Toast.LENGTH_SHORT).show()
+        }, 10)
+        addSide(dg, 14)
 
         // সংস্করণ ও আপডেট
         val ver = card()
