@@ -350,6 +350,36 @@ class MainActivity : Activity() {
         return r
     }
 
+    // সাইডবারের ছোট চালু/বন্ধ ঘর (দুই কলামের গ্রিডের জন্য)
+    private fun swCell(t: String, sub: String?, on: Boolean, f: (Boolean) -> Unit): LinearLayout {
+        val r = LinearLayout(this)
+        r.orientation = LinearLayout.HORIZONTAL
+        r.gravity = Gravity.CENTER_VERTICAL
+        r.background = rounded(inner, 10, line)
+        r.setPadding(d(10), d(8), d(6), d(8))
+        val col = LinearLayout(this)
+        col.orientation = LinearLayout.VERTICAL
+        col.addView(tv(t, 13f, bold = true))
+        if (sub != null) col.addView(tv(sub, 10f, mute))
+        r.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        r.addView(sw(on, f))
+        return r
+    }
+
+    // ঘরগুলো একই সারিতে দুই কলামে সাজায়; সংখ্যা বিজোড় হলে শেষ সারির ডান পাশ ফাঁকা থাকে
+    private fun grid(p: LinearLayout, cells: List<View>, top: Int = 8) {
+        var i = 0
+        while (i < cells.size) {
+            val r = LinearLayout(this)
+            r.orientation = LinearLayout.HORIZONTAL
+            r.addView(cells[i], LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f).apply { rightMargin = d(4) })
+            val b = cells.getOrNull(i + 1) ?: View(this)
+            r.addView(b, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f).apply { leftMargin = d(4) })
+            addTo(p, r, if (i == 0) top else 8)
+            i += 2
+        }
+    }
+
     private fun addSide(v: View, top: Int = 14) = addTo(side, v, top)
 
     // শেষ ঘটনা সাজিয়ে দেখায়; ৩ সেকেন্ড পরপর নিজে থেকে নতুন হয় (রিফ্রেশ বোতাম লাগে না)
@@ -441,7 +471,7 @@ class MainActivity : Activity() {
         val hd = LinearLayout(this)
         hd.orientation = LinearLayout.HORIZONTAL
         hd.gravity = Gravity.CENTER_VERTICAL
-        hd.addView(tv("মেনু", 22f, bold = true), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        hd.addView(tv("Menu", 22f, bold = true), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         val x = tv("✕", 20f, mute)
         x.setPadding(d(12), d(6), d(4), d(6))
         x.setOnClickListener { closeMenu() }
@@ -519,41 +549,30 @@ class MainActivity : Activity() {
         add(rc, 12)
 
         // ========== সাইডবারের বাকি অংশ ==========
-        // নোটিফিকেশন অ্যাক্সেস
-        val acc = card()
-        title(acc, "নোটিফিকেশন অ্যাক্সেস", if (ok) "✔ দেওয়া আছে" else "✘ দেওয়া নেই — এটা ছাড়া উত্তর যাবে না")
-        addTo(acc, if (ok) ghost("অ্যাক্সেস সেটিংস") { startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }
-        else primary("নোটিফিকেশন অ্যাক্সেস দিন") { startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }, 10)
-        addSide(acc, 16)
-
-        // ব্যাকগ্রাউন্ডে চালু রাখা
-        val bg = card()
-        title(bg, "ব্যাকগ্রাউন্ডে চালু রাখা", "অ্যাপ বন্ধ থাকলেও উত্তর যেতে এই অনুমতিগুলো দরকার।")
-        addTo(bg, ghost(if (free) "✔ ব্যাটারি সেভার বন্ধ" else "ব্যাটারি সেভার বাদ দিন", if (free) accent else warn) {
-            try {
-                startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName")))
-            } catch (e: Exception) {
-                startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
-            }
-        }, 12)
-        addTo(bg, ghost("Auto-start / ব্যাকগ্রাউন্ড অনুমতি") { openAutostart() }, 8)
-        addTo(bg, swRow("শক্তিশালী ব্যাকগ্রাউন্ড মোড", "ফোন ঘুমালেও জেগে থাকে। ব্যাটারি বেশি খরচ হয়।", Store.strong(c)) { v ->
+        // অনুমতি ও ব্যাকগ্রাউন্ড: দুই কলামের গ্রিড, কোনো বর্ণনা নেই
+        val a11yOn = (Settings.Secure.getString(contentResolver, "enabled_accessibility_services") ?: "").contains("$packageName/")
+        val perm = card()
+        grid(perm, listOf(
+            ghost(if (ok) "✔ নোটিফিকেশন অ্যাক্সেস" else "নোটিফিকেশন অ্যাক্সেস দিন", if (ok) accent else warn) {
+                startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+            },
+            ghost(if (a11yOn) "✔ Accessibility" else "Accessibility চালু করুন", if (a11yOn) accent else warn) {
+                startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+            },
+            ghost(if (free) "✔ ব্যাটারি সেভার বন্ধ" else "ব্যাটারি সেভার বাদ দিন", if (free) accent else warn) {
+                try {
+                    startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName")))
+                } catch (e: Exception) {
+                    startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+                }
+            },
+            ghost("Auto-start অনুমতি") { openAutostart() }
+        ), 0)
+        addTo(perm, swRow("শক্তিশালী ব্যাকগ্রাউন্ড মোড", null, Store.strong(c)) { v ->
             Store.setStrong(c, v)
             KeepAliveService.start(c)
         }, 12)
-        addTo(
-            bg,
-            tv("ফোনের Settings-এ এই অ্যাপের জন্য \"Auto-start\" ও \"ব্যাকগ্রাউন্ডে চলুক\" দিন এবং রিসেন্ট অ্যাপস থেকে অ্যাপটা লক করে রাখুন (ফোনভেদে নাম আলাদা)। সুইচ চালু থাকলে ওপরের বারে একটা ছোট \"AutoReply চালু আছে\" নোটিফিকেশন থাকবে, ওটা সরাবেন না।", 12f, mute), 12
-        )
-        addSide(bg, 14)
-
-        // দ্রুত উত্তর সহায়ক (Accessibility)
-        val a11yOn = (Settings.Secure.getString(contentResolver, "enabled_accessibility_services") ?: "").contains("$packageName/")
-        val ax = card()
-        title(ax, "দ্রুত উত্তর সহায়ক (পরীক্ষামূলক)", if (a11yOn) "✔ চালু আছে" else "বন্ধ আছে")
-        addTo(ax, tv("কিছু ফোন স্ক্রিন বন্ধ থাকলে অ্যাপ থামিয়ে রাখে, তখন উত্তর দেরিতে যায়। এটা চালু করলে ওই সমস্যা এড়ানো যেতে পারে। শুধু WhatsApp, Messenger, Telegram ইত্যাদি মেসেজিং অ্যাপের নোটিফিকেশন-ঘটনা শোনে, পর্দার কিছু পড়ে না। চালু করতে: Accessibility → ইনস্টল করা অ্যাপ → AutoReply → চালু। অপশন ধূসর থাকলে অ্যাপের ইনফোতে ⋮ → \"Allow restricted settings\" দিন।", 12f, mute), 8)
-        addTo(ax, ghost(if (a11yOn) "Accessibility সেটিংস" else "Accessibility চালু করুন") { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }, 10)
-        addSide(ax, 14)
+        addSide(perm, 16)
 
         // শেষ ঘটনা
         val act = card()
@@ -566,20 +585,22 @@ class MainActivity : Activity() {
         fillLog()
         addSide(act, 14)
 
-        // অ্যাপ/কপির তালিকা
+        // অ্যাপ/কপির তালিকা (দুই কলামের গ্রিড)
         val apps = card()
         title(apps, "কোন অ্যাপে চলবে", "একই অ্যাপের ক্লোন/ডুয়াল কপি থেকে একটা নোটিফিকেশন এলে এখানে নিজে যোগ হয়।")
         val shown = HashSet<String>()
+        val cells = ArrayList<View>()
         val fmt = SimpleDateFormat("dd MMM HH:mm", Locale.US)
         fun arow(pkg: String, uid: Int, sub: String?) {
-            addTo(apps, swRow(Store.label(pkg, uid), sub, Store.instOn(c, pkg, uid)) { v -> Store.setInstOn(c, pkg, uid, v) }, 12)
+            cells.add(swCell(Store.label(pkg, uid), sub, Store.instOn(c, pkg, uid)) { v -> Store.setInstOn(c, pkg, uid, v) })
             shown.add("$pkg@$uid")
         }
         for ((pkg, _) in Store.APPS) arow(pkg, 0, null)
         for (i in Store.insts(c)) {
             if ("${i.pkg}@${i.uid}" in shown) continue
-            arow(i.pkg, i.uid, "শেষ নোটিফিকেশন " + fmt.format(Date(i.t)))
+            arow(i.pkg, i.uid, fmt.format(Date(i.t)))
         }
+        grid(apps, cells, 12)
         addSide(apps, 14)
 
         // সংস্করণ ও আপডেট
