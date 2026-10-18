@@ -76,9 +76,6 @@ object Store {
         p(c).edit().putString("insts", a.toString()).apply()
     }
 
-    fun cooldown(c: Context) = p(c).getInt("cd", 0)
-    fun setCooldown(c: Context, v: Int) = p(c).edit().putInt("cd", v).apply()
-
     fun log(c: Context) = p(c).getString("log", "") ?: ""
     fun setLog(c: Context, v: String) = p(c).edit().putString("log", v).apply()
 

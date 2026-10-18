@@ -5,19 +5,22 @@ import android.app.AlertDialog
 import android.app.PendingIntent
 import android.content.Intent
 import android.content.pm.PackageInstaller
+import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
-import android.text.Editable
-import android.text.InputType
-import android.text.TextWatcher
+import android.text.SpannableStringBuilder
+import android.text.Spanned
+import android.text.style.ForegroundColorSpan
+import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
-import android.widget.Button
-import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -33,9 +36,26 @@ import java.util.Locale
 class MainActivity : Activity() {
     private lateinit var root: LinearLayout
     private lateinit var sv: ScrollView
-    private val mute = Color.parseColor("#93A6AB")
     private val repo = "raqialamgirabdullah-rgb/AutoReply"
     private var update: Pair<Int, String>? = null // (নতুন সংস্করণ নম্বর, APK লিংক)
+
+    private val ink = Color.parseColor("#EAF2F3")
+    private val mute = Color.parseColor("#8FA3A8")
+    private val panel = Color.parseColor("#121A1F")
+    private val inner = Color.parseColor("#0D1418")
+    private val line = Color.parseColor("#1F2C32")
+    private val accent = Color.parseColor("#5CC9BC")
+    private val warn = Color.parseColor("#F2867F")
+
+    private val handler = Handler(Looper.getMainLooper())
+    private var logBox: LinearLayout? = null
+    private var logShown = "\u0000"
+    private val ticker = object : Runnable {
+        override fun run() {
+            fillLog()
+            handler.postDelayed(this, 3000)
+        }
+    }
 
     private fun d(v: Int) = (v * resources.displayMetrics.density).toInt()
 
@@ -43,7 +63,7 @@ class MainActivity : Activity() {
         super.onCreate(s)
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(d(16), d(24), d(16), d(40))
+            setPadding(d(16), d(28), d(16), d(40))
         }
         sv = ScrollView(this).apply { addView(root) }
         setContentView(sv)
@@ -53,6 +73,13 @@ class MainActivity : Activity() {
         super.onResume()
         build()
         check(false)
+        handler.removeCallbacks(ticker)
+        handler.postDelayed(ticker, 3000)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        handler.removeCallbacks(ticker)
     }
 
     private fun curVer(): Int {
@@ -129,13 +156,24 @@ class MainActivity : Activity() {
     private fun granted() =
         (Settings.Secure.getString(contentResolver, "enabled_notification_listeners") ?: "").contains(packageName)
 
-    private fun add(v: View, top: Int = 10) {
-        val lp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-        lp.topMargin = d(top)
-        root.addView(v, lp)
+    // ---------- ডিজাইনের ছোট অংশগুলো ----------
+    private fun rounded(fill: Int, r: Int, stroke: Int = 0): GradientDrawable {
+        val g = GradientDrawable()
+        g.setColor(fill)
+        g.cornerRadius = d(r).toFloat()
+        if (stroke != 0) g.setStroke(d(1), stroke)
+        return g
     }
 
-    private fun tv(t: String, sp: Float = 15f, c: Int = Color.WHITE, bold: Boolean = false): TextView {
+    private fun addTo(p: LinearLayout, v: View, top: Int = 8) {
+        val lp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        lp.topMargin = d(top)
+        p.addView(v, lp)
+    }
+
+    private fun add(v: View, top: Int = 12) = addTo(root, v, top)
+
+    private fun tv(t: String, sp: Float = 15f, c: Int = ink, bold: Boolean = false): TextView {
         val v = TextView(this)
         v.text = t
         v.textSize = sp
@@ -144,146 +182,213 @@ class MainActivity : Activity() {
         return v
     }
 
-    private fun btn(t: String, f: () -> Unit): Button {
-        val b = Button(this)
-        b.text = t
-        b.isAllCaps = false
+    private fun card(stroke: Int = line): LinearLayout {
+        val l = LinearLayout(this)
+        l.orientation = LinearLayout.VERTICAL
+        l.background = rounded(panel, 18, stroke)
+        l.setPadding(d(16), d(14), d(16), d(16))
+        return l
+    }
+
+    private fun title(p: LinearLayout, t: String, hint: String? = null) {
+        addTo(p, tv(t, 17f, bold = true), 0)
+        if (hint != null) addTo(p, tv(hint, 12f, mute), 4)
+    }
+
+    private fun primary(t: String, f: () -> Unit): TextView {
+        val b = tv(t, 15f, Color.parseColor("#06201C"), true)
+        b.gravity = Gravity.CENTER
+        b.background = rounded(accent, 12)
+        b.setPadding(d(16), d(13), d(16), d(13))
         b.setOnClickListener { f() }
         return b
+    }
+
+    private fun ghost(t: String, c: Int = accent, f: () -> Unit): TextView {
+        val b = tv(t, 13f, c, true)
+        b.gravity = Gravity.CENTER
+        b.background = rounded(inner, 10, line)
+        b.setPadding(d(12), d(10), d(12), d(10))
+        b.setOnClickListener { f() }
+        return b
+    }
+
+    private fun sw(on: Boolean, f: (Boolean) -> Unit): Switch {
+        val s = Switch(this)
+        val st = arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf())
+        s.thumbTintList = ColorStateList(st, intArrayOf(accent, Color.parseColor("#8A9A9E")))
+        s.trackTintList = ColorStateList(st, intArrayOf(Color.parseColor("#2C6B64"), Color.parseColor("#2A3437")))
+        s.isChecked = on
+        s.setOnCheckedChangeListener { _, v -> f(v) }
+        return s
+    }
+
+    private fun swRow(t: String, sub: String?, on: Boolean, big: Boolean = false, subColor: Int = mute, f: (Boolean) -> Unit): LinearLayout {
+        val r = LinearLayout(this)
+        r.orientation = LinearLayout.HORIZONTAL
+        r.gravity = Gravity.CENTER_VERTICAL
+        val col = LinearLayout(this)
+        col.orientation = LinearLayout.VERTICAL
+        col.addView(tv(t, if (big) 20f else 15f, bold = big))
+        if (sub != null) col.addView(tv(sub, 12f, subColor))
+        r.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        r.addView(sw(on, f))
+        return r
+    }
+
+    // শেষ ঘটনা সাজিয়ে দেখায়; ৩ সেকেন্ড পরপর নিজে থেকে নতুন হয় (রিফ্রেশ বোতাম লাগে না)
+    private fun fillLog() {
+        val box = logBox ?: return
+        val raw = Store.log(this)
+        if (raw == logShown) return
+        logShown = raw
+        box.removeAllViews()
+        if (raw.isEmpty()) {
+            box.addView(tv("এখনো কোনো মেসেজের নোটিফিকেশন আসেনি", 13f, mute))
+            return
+        }
+        val p = raw.split(" | ", limit = 4)
+        if (p.size < 4) {
+            box.addView(tv(raw, 13f, mute))
+            return
+        }
+        val done = p[3].contains("উত্তর পাঠানো হয়েছে")
+        val head = SpannableStringBuilder("● ")
+        head.setSpan(ForegroundColorSpan(if (done) accent else warn), 0, 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        head.append(p[1]).append("  ·  ").append(p[0])
+        val h = TextView(this)
+        h.text = head
+        h.textSize = 14f
+        h.setTextColor(ink)
+        h.setTypeface(h.typeface, Typeface.BOLD)
+        box.addView(h)
+        val who = tv("প্রেরক: " + p[2], 13f, mute)
+        who.setPadding(0, d(4), 0, 0)
+        box.addView(who)
+        val res = tv(p[3], 13f, mute)
+        res.setPadding(0, d(2), 0, 0)
+        box.addView(res)
     }
 
     private fun build() {
         root.removeAllViews()
         val c = this
         val ok = granted()
-        add(tv("AutoReply", 26f, bold = true), 0)
+        val on = Store.enabled(c)
+
+        add(tv("AutoReply", 30f, bold = true), 0)
+        add(tv("মেসেজ এলে নিজে থেকে উত্তর", 13f, mute), 2)
+
         val up = update
         if (up != null) {
-            add(tv("নতুন সংস্করণ আছে (${up.first})", 16f, Color.parseColor("#5CC9BC"), true), 12)
-            add(btn("আপডেট করুন") { install(up.second) }, 4)
-            add(btn("ব্রাউজার দিয়ে ডাউনলোড করুন (বিকল্প)") {
-                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(up.second)))
-            }, 2)
+            val u = card(accent)
+            title(u, "নতুন সংস্করণ আছে (${up.first})")
+            addTo(u, primary("আপডেট করুন") { install(up.second) }, 10)
+            addTo(u, ghost("ব্রাউজার দিয়ে ডাউনলোড করুন") { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(up.second))) }, 8)
+            add(u, 16)
         }
-        add(
-            tv(
-                if (ok) "✔ নোটিফিকেশন অ্যাক্সেস দেওয়া আছে" else "✘ নোটিফিকেশন অ্যাক্সেস দেওয়া নেই", 15f,
-                Color.parseColor(if (ok) "#5CC9BC" else "#F2867F"), true
-            ), 10
+
+        // মূল সুইচ ও অ্যাক্সেসের অবস্থা
+        val main = card()
+        main.addView(
+            swRow(
+                if (on) "চালু আছে" else "বন্ধ আছে",
+                if (ok) "✔ নোটিফিকেশন অ্যাক্সেস দেওয়া আছে" else "✘ নোটিফিকেশন অ্যাক্সেস দেওয়া নেই",
+                on, true, if (ok) accent else warn
+            ) { v ->
+                Store.setEnabled(c, v)
+                if (v && !granted()) Toast.makeText(c, "আগে নোটিফিকেশন অ্যাক্সেস দিন", Toast.LENGTH_LONG).show()
+                handler.post { build() }
+            }
         )
         if (!ok) {
-            add(
-                tv(
-                    "অপশনটা ধূসর থাকলে: ফোনের Settings → Apps → এই অ্যাপ → ওপরে ডানে ⋮ → \"Allow restricted settings\" দিন, তারপর আবার চেষ্টা করুন।",
-                    13f, mute
-                ), 4
-            )
+            addTo(main, tv("অপশনটা ধূসর থাকলে: ফোনের Settings → Apps → এই অ্যাপ → ওপরে ডানে ⋮ → \"Allow restricted settings\" দিন, তারপর আবার চেষ্টা করুন।", 12f, mute), 10)
+            addTo(main, primary("নোটিফিকেশন অ্যাক্সেস দিন") { startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }, 10)
         }
-        add(btn(if (ok) "নোটিফিকেশন অ্যাক্সেস সেটিংস" else "নোটিফিকেশন অ্যাক্সেস দিন") {
-            startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
-        }, 8)
-        add(btn("ব্যাটারি সেভার থেকে বাদ দিন") {
-            startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
-        }, 2)
-
-        val sw = Switch(this)
-        sw.text = "AutoReply চালু"
-        sw.textSize = 17f
-        sw.setTextColor(Color.WHITE)
-        sw.isChecked = Store.enabled(c)
-        sw.setOnCheckedChangeListener { _, on ->
-            Store.setEnabled(c, on)
-            if (on && !granted()) Toast.makeText(c, "আগে নোটিফিকেশন অ্যাক্সেস দিন", Toast.LENGTH_LONG).show()
+        val tools = LinearLayout(this)
+        tools.orientation = LinearLayout.HORIZONTAL
+        if (ok) {
+            val g1 = ghost("অ্যাক্সেস সেটিংস") { startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }
+            tools.addView(g1, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { rightMargin = d(8) })
         }
-        add(sw, 18)
+        val g2 = ghost("ব্যাটারি সেভার বাদ দিন") { startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) }
+        tools.addView(g2, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        addTo(main, tools, 14)
+        add(main, 16)
 
-        add(tv("শেষ ঘটনা (কেন উত্তর গেল বা গেল না)", 17f, bold = true), 22)
-        add(tv(Store.log(c).ifEmpty { "এখনো কোনো মেসেজের নোটিফিকেশন আসেনি" }, 13f, mute), 2)
-        add(btn("রিফ্রেশ") { build() }, 4)
+        // শেষ ঘটনা
+        val act = card()
+        title(act, "সর্বশেষ কার্যকলাপ")
+        val lb = LinearLayout(this)
+        lb.orientation = LinearLayout.VERTICAL
+        addTo(act, lb, 10)
+        logBox = lb
+        logShown = "\u0000"
+        fillLog()
+        add(act, 14)
 
-        add(tv("কোন কোন অ্যাপে চলবে", 17f, bold = true), 22)
-        add(
-            tv(
-                "একই অ্যাপের একাধিক কপি (ক্লোন/ডুয়াল অ্যাপ) থাকলে প্রতিটা থেকে একটা নোটিফিকেশন আসার পর এখানে নিজে থেকে যোগ হবে। WhatsApp, WhatsApp Business ও Messenger-এর কপি আপনা-আপনি চালু থাকে; অন্য অচেনা অ্যাপ (Reply আছে এমন) টিক দিয়ে নিজে চালু করতে হবে।",
-                12f, mute
-            ), 2
-        )
+        // অ্যাপ/কপির তালিকা
+        val apps = card()
+        title(apps, "কোন অ্যাপে চলবে", "একই অ্যাপের ক্লোন/ডুয়াল কপি থেকে একটা নোটিফিকেশন এলে এখানে নিজে যোগ হয়।")
         val shown = HashSet<String>()
         val fmt = SimpleDateFormat("dd MMM HH:mm", Locale.US)
-        fun row(pkg: String, uid: Int, extra: String) {
-            val cb = CheckBox(this)
-            cb.text = Store.label(pkg, uid) + extra
-            cb.setTextColor(Color.WHITE)
-            cb.isChecked = Store.instOn(c, pkg, uid)
-            cb.setOnCheckedChangeListener { _, v -> Store.setInstOn(c, pkg, uid, v) }
-            add(cb, 2)
+        fun row(pkg: String, uid: Int, sub: String?) {
+            addTo(apps, swRow(Store.label(pkg, uid), sub, Store.instOn(c, pkg, uid)) { v -> Store.setInstOn(c, pkg, uid, v) }, 12)
             shown.add("$pkg@$uid")
         }
-        for ((pkg, _) in Store.APPS) row(pkg, 0, "")
+        for ((pkg, _) in Store.APPS) row(pkg, 0, null)
         for (i in Store.insts(c)) {
             if ("${i.pkg}@${i.uid}" in shown) continue
-            row(i.pkg, i.uid, "  · শেষ নোটিফিকেশন " + fmt.format(Date(i.t)))
+            row(i.pkg, i.uid, "শেষ নোটিফিকেশন " + fmt.format(Date(i.t)))
         }
+        add(apps, 14)
 
-        add(tv("একই ব্যক্তিকে আবার উত্তর দেওয়ার আগে অপেক্ষা (সেকেন্ড, ০ = অপেক্ষা নেই)", 14f, mute), 18)
-        val cd = EditText(this)
-        cd.inputType = InputType.TYPE_CLASS_NUMBER
-        cd.setText(Store.cooldown(c).toString())
-        cd.setTextColor(Color.WHITE)
-        cd.addTextChangedListener(object : TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, n: Int) {}
-            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, n: Int) {}
-            override fun afterTextChanged(s: Editable?) {
-                Store.setCooldown(c, (s.toString().toIntOrNull() ?: 0).coerceAtLeast(0))
-            }
-        })
-        add(cd, 2)
-
+        // উত্তরের নিয়ম
         val rules = Store.rules(c)
-        add(tv("উত্তরের নিয়ম", 17f, bold = true), 22)
-        add(tv("মেসেজে এই শব্দগুলোর কোনো একটা থাকলেই উত্তর যাবে। ওপর থেকে নিচে যে নিয়ম আগে মিলবে সেটাই কাজ করবে। গ্রুপ চ্যাটে উত্তর যায় না।", 13f, mute), 2)
+        val rc = card()
+        title(rc, "উত্তরের নিয়ম", "মেসেজে শব্দগুলোর একটা থাকলেই উত্তর যায়। ওপরের নিয়ম আগে মেলে। গ্রুপ চ্যাটে উত্তর যায় না।")
         for (r in rules) {
-            val box = LinearLayout(this)
-            box.orientation = LinearLayout.VERTICAL
-            box.setBackgroundColor(Color.parseColor("#1A2224"))
-            box.setPadding(d(12), d(10), d(12), d(10))
-            val cb = CheckBox(this)
-            cb.text = "যদি: " + r.keys
-            cb.setTextColor(Color.WHITE)
-            cb.isChecked = r.on
-            cb.setOnCheckedChangeListener { _, v ->
+            val rb = LinearLayout(this)
+            rb.orientation = LinearLayout.VERTICAL
+            rb.background = rounded(inner, 14, line)
+            rb.setPadding(d(14), d(12), d(14), d(12))
+            val top = LinearLayout(this)
+            top.orientation = LinearLayout.HORIZONTAL
+            top.gravity = Gravity.CENTER_VERTICAL
+            val col = LinearLayout(this)
+            col.orientation = LinearLayout.VERTICAL
+            col.addView(tv("যদি: " + r.keys, 15f, bold = true))
+            val rep = tv("উত্তর: " + r.reply, 13f, mute)
+            rep.setPadding(0, d(3), 0, 0)
+            col.addView(rep)
+            top.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            top.addView(sw(r.on) { v ->
                 r.on = v
                 Store.saveRules(c, rules)
-            }
-            box.addView(cb)
-            box.addView(tv("উত্তর: " + r.reply, 14f, mute))
-            val row = LinearLayout(this)
-            row.addView(btn("সম্পাদনা") { edit(r, rules) })
-            row.addView(btn("মুছুন") {
+            })
+            rb.addView(top)
+            val acts = LinearLayout(this)
+            acts.orientation = LinearLayout.HORIZONTAL
+            acts.addView(ghost("সম্পাদনা") { edit(r, rules) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { rightMargin = d(8) })
+            acts.addView(ghost("মুছুন", warn) {
                 rules.remove(r)
                 Store.saveRules(c, rules)
                 build()
-            })
-            box.addView(row)
-            add(box, 8)
+            }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            addTo(rb, acts, 12)
+            addTo(rc, rb, 12)
         }
-        add(btn("+ নতুন নিয়ম") { edit(null, rules) }, 10)
+        addTo(rc, primary("+ নতুন নিয়ম") { edit(null, rules) }, 14)
+        add(rc, 14)
 
-        add(tv("পরীক্ষা: মেসেজ লিখে দেখুন কী উত্তর যেত", 17f, bold = true), 26)
-        val ti = EditText(this)
-        ti.hint = "যেমন: আসসালামু আলাইকুম"
-        ti.setTextColor(Color.WHITE)
-        ti.setHintTextColor(mute)
-        val res = tv("", 14f, mute)
-        add(ti, 4)
-        add(btn("দেখুন") {
-            val m = Store.match(c, ti.text.toString())
-            res.text = if (m != null) "উত্তর যেত: $m" else "কোনো নিয়ম মেলেনি, উত্তর যাবে না"
-        }, 4)
-        add(res, 4)
-
-        add(tv("সংস্করণ ${curVer()}", 12f, mute), 30)
-        add(btn("আপডেট আছে কি দেখুন") { check(true) }, 4)
+        val foot = tv("সংস্করণ ${curVer()}", 12f, mute)
+        foot.gravity = Gravity.CENTER
+        add(foot, 22)
+        val chk = tv("আপডেট আছে কি দেখুন", 13f, accent, true)
+        chk.gravity = Gravity.CENTER
+        chk.setPadding(0, d(10), 0, d(10))
+        chk.setOnClickListener { check(true) }
+        add(chk, 2)
     }
 
     private fun edit(r: Rule?, rules: MutableList<Rule>) {

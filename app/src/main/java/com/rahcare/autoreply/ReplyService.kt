@@ -11,14 +11,13 @@ import java.util.Date
 import java.util.Locale
 
 class ReplyService : NotificationListenerService() {
-    private val lastReply = HashMap<String, Long>()  // প্রেরক -> শেষ উত্তরের সময়
     private val lastSeen = HashMap<String, String>() // নোটিফিকেশন -> শেষ দেখা মেসেজ (একই মেসেজে দুবার নয়)
     private val sent = HashSet<String>()             // আমাদের পাঠানো উত্তর (চক্র ঠেকাতে)
 
     // শেষ ঘটনার রেকর্ড, অ্যাপের মূল পাতায় দেখা যায়
     private fun log(pkg: String, uid: Int, who: String, text: String, res: String) {
         val t = SimpleDateFormat("HH:mm:ss", Locale.US).format(Date())
-        Store.setLog(applicationContext, "$t | ${Store.label(pkg, uid)} | $who | \"$text\" → $res")
+        Store.setLog(applicationContext, "$t | ${Store.label(pkg, uid)} | $who | \"$text\" — $res")
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
@@ -66,19 +65,11 @@ class ReplyService : NotificationListenerService() {
         val reply = Store.match(c, text)
         if (reply == null) { log(pkg, uid, sender, text, "কোনো নিয়ম মেলেনি"); return }
 
-        val key = "$pkg@$uid|$sender"
-        val now = System.currentTimeMillis()
-        if (now - (lastReply[key] ?: 0L) < Store.cooldown(c) * 1000L) {
-            log(pkg, uid, sender, text, "অপেক্ষার সময় চলছে")
-            return
-        }
-
         val acts = n.actions
         if (acts == null) { log(pkg, uid, sender, text, "নোটিফিকেশনে কোনো বাটন নেই"); return }
         for (a in acts) {
             val ris = a.remoteInputs ?: continue
             val ri = ris.firstOrNull { it.allowFreeFormInput } ?: continue
-            lastReply[key] = now
             if (sent.size > 50) sent.clear()
             sent.add(reply)
             val err = send(a, ris, ri, reply)
