@@ -2,7 +2,9 @@ package com.rahcare.autoreply
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.Manifest
 import android.app.PendingIntent
+import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageInstaller
 import android.content.res.ColorStateList
@@ -14,7 +16,9 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
 import android.provider.Settings
+import android.service.notification.NotificationListenerService
 import android.text.SpannableStringBuilder
 import android.text.Spanned
 import android.text.style.ForegroundColorSpan
@@ -71,6 +75,11 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
+        }
+        if (Store.enabled(this)) KeepAliveService.start(this)
+        try { NotificationListenerService.requestRebind(ComponentName(this, ReplyService::class.java)) } catch (e: Exception) {}
         build()
         check(false)
         handler.removeCallbacks(ticker)
@@ -297,6 +306,7 @@ class MainActivity : Activity() {
                 on, true, if (ok) accent else warn
             ) { v ->
                 Store.setEnabled(c, v)
+                if (v) KeepAliveService.start(c) else KeepAliveService.stop(c)
                 if (v && !granted()) Toast.makeText(c, "আগে নোটিফিকেশন অ্যাক্সেস দিন", Toast.LENGTH_LONG).show()
                 handler.post { build() }
             }
@@ -311,9 +321,20 @@ class MainActivity : Activity() {
             val g1 = ghost("অ্যাক্সেস সেটিংস") { startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }
             tools.addView(g1, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { rightMargin = d(8) })
         }
-        val g2 = ghost("ব্যাটারি সেভার বাদ দিন") { startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) }
+        val free = getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(packageName)
+        val g2 = ghost(if (free) "✔ ব্যাটারি সেভার বন্ধ" else "ব্যাটারি সেভার বাদ দিন", if (free) accent else warn) {
+            try {
+                startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName")))
+            } catch (e: Exception) {
+                startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+            }
+        }
         tools.addView(g2, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         addTo(main, tools, 14)
+        addTo(
+            main,
+            tv("ব্যাকগ্রাউন্ডে ঠিকমতো চলতে: ফোনের Settings-এ এই অ্যাপের জন্য \"Auto-start\" ও \"ব্যাকগ্রাউন্ডে চলুক\" অনুমতি দিন এবং রিসেন্ট অ্যাপস থেকে অ্যাপটা লক করে রাখুন (ফোনভেদে নাম আলাদা)। ওপরের সুইচ চালু থাকলে ওপরের নোটিফিকেশন বারে একটা ছোট \"AutoReply চালু আছে\" নোটিফিকেশন থাকবে, ওটা সরাবেন না।", 12f, mute), 12
+        )
         add(main, 16)
 
         // শেষ ঘটনা

@@ -2,6 +2,7 @@ package com.rahcare.autoreply
 
 import android.app.Notification
 import android.app.RemoteInput
+import android.content.ComponentName
 import android.content.Intent
 import android.os.Bundle
 import android.service.notification.NotificationListenerService
@@ -20,8 +21,28 @@ class ReplyService : NotificationListenerService() {
         Store.setLog(applicationContext, "$t | ${Store.label(pkg, uid)} | $who | \"$text\" — $res")
     }
 
-    override fun onNotificationPosted(sbn: StatusBarNotification) {
+    override fun onNotificationPosted(sbn: StatusBarNotification) = handle(sbn, false, false)
+
+    // সিস্টেম সংযোগ কেটে দিলে নিজে থেকে আবার সংযোগ চায়
+    override fun onListenerDisconnected() {
+        super.onListenerDisconnected()
+        try { requestRebind(ComponentName(this, ReplyService::class.java)) } catch (e: Exception) {}
+    }
+
+    // সংযোগ ফিরলে (ফোন ঘুম থেকে উঠলে/অ্যাপ আবার চালু হলে) এর মধ্যে আসা মেসেজগুলোতে উত্তর দেয়
+    override fun onListenerConnected() {
+        super.onListenerConnected()
         val c = applicationContext
+        try {
+            val first = !Store.catchInit(c)
+            activeNotifications?.forEach { handle(it, true, first) }
+            if (first) Store.setCatchInit(c)
+        } catch (e: Exception) {}
+    }
+
+    private fun handle(sbn: StatusBarNotification, catchUp: Boolean, markOnly: Boolean) {
+        val c = applicationContext
+        if (catchUp && System.currentTimeMillis() - sbn.postTime > 30 * 60 * 1000L) return
         val pkg = sbn.packageName
         val n = sbn.notification
         if (pkg == packageName) return
@@ -60,6 +81,10 @@ class ReplyService : NotificationListenerService() {
 
         if (lastSeen[sbn.key] == stamp + text) return
         lastSeen[sbn.key] = stamp + text
+        val hid = sbn.key + "|" + stamp + "|" + text.hashCode()
+        if (catchUp && Store.handled(c, hid)) return
+        Store.mark(c, hid)
+        if (markOnly) return
         if (text in sent) return // এটা আমাদেরই পাঠানো উত্তর
 
         val reply = Store.match(c, text)

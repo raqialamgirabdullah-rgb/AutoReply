@@ -76,6 +76,15 @@ object Store {
         p(c).edit().putString("insts", a.toString()).apply()
     }
 
+    // বন্ধ থাকার সময় আসা মেসেজে পরে উত্তর দেওয়ার সময় একই মেসেজে দুবার যেন না যায়
+    fun handled(c: Context, id: String) = (p(c).getString("hid", "") ?: "").split('\n').contains(id)
+    fun mark(c: Context, id: String) {
+        val l = (p(c).getString("hid", "") ?: "").split('\n').filter { it.isNotEmpty() && it != id }
+        p(c).edit().putString("hid", (l + id).takeLast(60).joinToString("\n")).apply()
+    }
+    fun catchInit(c: Context) = p(c).getBoolean("ci", false)
+    fun setCatchInit(c: Context) = p(c).edit().putBoolean("ci", true).apply()
+
     fun log(c: Context) = p(c).getString("log", "") ?: ""
     fun setLog(c: Context, v: String) = p(c).edit().putString("log", v).apply()
 
