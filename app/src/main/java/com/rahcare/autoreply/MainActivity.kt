@@ -32,6 +32,7 @@ import java.util.Locale
 
 class MainActivity : Activity() {
     private lateinit var root: LinearLayout
+    private lateinit var sv: ScrollView
     private val mute = Color.parseColor("#93A6AB")
     private val repo = "raqialamgirabdullah-rgb/AutoReply"
     private var update: Pair<Int, String>? = null // (নতুন সংস্করণ নম্বর, APK লিংক)
@@ -44,7 +45,8 @@ class MainActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             setPadding(d(16), d(24), d(16), d(40))
         }
-        setContentView(ScrollView(this).apply { addView(root) })
+        sv = ScrollView(this).apply { addView(root) }
+        setContentView(sv)
     }
 
     override fun onResume() {
@@ -75,10 +77,14 @@ class MainActivity : Activity() {
                     val changed = now?.first != update?.first
                     update = now
                     if (changed || manual) build()
-                    if (manual && now == null) Toast.makeText(this, "আপনার সংস্করণই সর্বশেষ", Toast.LENGTH_SHORT).show()
+                    if (manual && now == null) Toast.makeText(this, "আপনার সংস্করণই সর্বশেষ (সর্বশেষ প্রকাশিত: $v)", Toast.LENGTH_SHORT).show()
+                    if (manual && now != null) {
+                        Toast.makeText(this, "নতুন সংস্করণ পাওয়া গেছে ($v) — একদম ওপরে আপডেটের বোতাম আছে", Toast.LENGTH_LONG).show()
+                        sv.post { sv.fullScroll(View.FOCUS_UP) }
+                    }
                 }
             } catch (e: Exception) {
-                if (manual) runOnUiThread { Toast.makeText(this, "চেক করা গেল না, ইন্টারনেট দেখুন", Toast.LENGTH_SHORT).show() }
+                if (manual) runOnUiThread { Toast.makeText(this, "চেক করা গেল না (${e.javaClass.simpleName}: ${e.message?.take(60)}), ইন্টারনেট দেখুন", Toast.LENGTH_LONG).show() }
             }
         }.start()
     }
@@ -101,6 +107,7 @@ class MainActivity : Activity() {
                 val cn = URL(url).openConnection() as HttpURLConnection
                 cn.connectTimeout = 15000
                 cn.readTimeout = 30000
+                if (cn.responseCode != 200) throw Exception("HTTP ${cn.responseCode}")
                 cn.inputStream.use { ins ->
                     s.openWrite("a", 0, -1).use { out ->
                         ins.copyTo(out)
@@ -114,7 +121,7 @@ class MainActivity : Activity() {
                 s.commit(pi.intentSender)
             } catch (e: Exception) {
                 try { inst.abandonSession(id) } catch (x: Exception) {}
-                runOnUiThread { Toast.makeText(this, "ডাউনলোড বা ইনস্টল শুরু করা গেল না", Toast.LENGTH_LONG).show() }
+                runOnUiThread { Toast.makeText(this, "ডাউনলোড বা ইনস্টল শুরু করা গেল না (${e.javaClass.simpleName}: ${e.message?.take(70)}) — নিচের ব্রাউজার বোতামটা ব্যবহার করুন", Toast.LENGTH_LONG).show() }
             }
         }.start()
     }
@@ -154,6 +161,9 @@ class MainActivity : Activity() {
         if (up != null) {
             add(tv("নতুন সংস্করণ আছে (${up.first})", 16f, Color.parseColor("#5CC9BC"), true), 12)
             add(btn("আপডেট করুন") { install(up.second) }, 4)
+            add(btn("ব্রাউজার দিয়ে ডাউনলোড করুন (বিকল্প)") {
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(up.second)))
+            }, 2)
         }
         add(
             tv(

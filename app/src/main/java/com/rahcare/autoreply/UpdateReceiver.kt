@@ -15,7 +15,11 @@ class UpdateReceiver : BroadcastReceiver() {
                 val ui = i.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)
                 if (ui != null) {
                     ui.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    c.startActivity(ui)
+                    try {
+                        c.startActivity(ui)
+                    } catch (e: Exception) {
+                        Toast.makeText(c, "নিশ্চিত করার পর্দা খুলল না — অ্যাপে ফিরে \"ব্রাউজার দিয়ে ডাউনলোড করুন\" চাপুন", Toast.LENGTH_LONG).show()
+                    }
                 }
             }
             PackageInstaller.STATUS_SUCCESS -> {}
