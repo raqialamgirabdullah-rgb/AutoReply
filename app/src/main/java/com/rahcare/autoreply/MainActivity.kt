@@ -571,6 +571,10 @@ class MainActivity : Activity() {
             }
         }, 12)
         addTo(bg, ghost("Auto-start / ব্যাকগ্রাউন্ড অনুমতি") { openAutostart() }, 8)
+        addTo(bg, swRow("শক্তিশালী ব্যাকগ্রাউন্ড মোড", "ফোন ঘুমালেও জেগে থাকে। ব্যাটারি বেশি খরচ হয়।", Store.strong(c)) { v ->
+            Store.setStrong(c, v)
+            KeepAliveService.start(c)
+        }, 12)
         for ((pkg, name) in Store.APPS) {
             val has = try { packageManager.getPackageInfo(pkg, 0); true } catch (e: Exception) { false }
             if (has) addTo(bg, ghost("$name-এর ব্যাটারি সেটিং") {

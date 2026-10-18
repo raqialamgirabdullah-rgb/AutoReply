@@ -95,6 +95,10 @@ object Store {
             p(c).edit().putString("ev", (l + "$t $msg").takeLast(60).joinToString("\n")).apply()
         } catch (e: Exception) {}
     }
+    // "শক্তিশালী মোড": CPU জাগিয়ে রাখে (ব্যাটারি বেশি খরচ), ফোন যে অ্যাপকে ঘুম পাড়ায় তার জন্য
+    fun strong(c: Context) = p(c).getBoolean("strong", false)
+    fun setStrong(c: Context, v: Boolean) = p(c).edit().putBoolean("strong", v).apply()
+
     fun events(c: Context) = p(c).getString("ev", "") ?: ""
 
     fun log(c: Context) = p(c).getString("log", "") ?: ""
