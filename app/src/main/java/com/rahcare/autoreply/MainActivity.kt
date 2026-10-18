@@ -548,6 +548,14 @@ class MainActivity : Activity() {
         addTo(rc, primary("+ নতুন নিয়ম") { edit(null, rules) }, 14)
         add(rc, 12)
 
+        // নতুন সংস্করণ এলে শুধু তখনই মূল পাতার একদম নিচে আপডেটের কার্ড দেখায়
+        if (up != null) {
+            val u = card(accent)
+            title(u, "নতুন সংস্করণ এসেছে (${up.v})", "একবার চাপলেই ডাউনলোড ও ইনস্টল শুরু হবে।")
+            addTo(u, primary("আপডেট করুন") { install(up.url) }, 12)
+            add(u, 12)
+        }
+
         // ========== সাইডবারের বাকি অংশ ==========
         // অনুমতি ও ব্যাকগ্রাউন্ড: দুই কলামের গ্রিড, কোনো বর্ণনা নেই
         val a11yOn = (Settings.Secure.getString(contentResolver, "enabled_accessibility_services") ?: "").contains("$packageName/")
