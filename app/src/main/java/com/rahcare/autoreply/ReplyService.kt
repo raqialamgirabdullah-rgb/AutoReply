@@ -21,23 +21,38 @@ class ReplyService : NotificationListenerService() {
         Store.setLog(applicationContext, "$t | ${Store.label(pkg, uid)} | $who | \"$text\" — $res")
     }
 
+    companion object {
+        // সিস্টেম সত্যিই লিসেনার জুড়ে দিয়েছে কি না (মূল পাতায় আসল অবস্থা দেখানোর জন্য)
+        @Volatile var connected = false
+    }
+
     override fun onNotificationPosted(sbn: StatusBarNotification) = handle(sbn, false, false)
 
     // সিস্টেম সংযোগ কেটে দিলে নিজে থেকে আবার সংযোগ চায়
     override fun onListenerDisconnected() {
         super.onListenerDisconnected()
+        connected = false
         try { requestRebind(ComponentName(this, ReplyService::class.java)) } catch (e: Exception) {}
     }
 
     // সংযোগ ফিরলে (ফোন ঘুম থেকে উঠলে/অ্যাপ আবার চালু হলে) এর মধ্যে আসা মেসেজগুলোতে উত্তর দেয়
     override fun onListenerConnected() {
         super.onListenerConnected()
+        connected = true
         val c = applicationContext
+        // সিস্টেম লিসেনার জুড়লেই কিপ-অ্যালাইভ সার্ভিস ও ওয়াচডগও চালু (অ্যাপ খুলতে হবে না)
+        Watchdog.schedule(c)
+        if (Store.enabled(c)) KeepAliveService.start(c)
         try {
             val first = !Store.catchInit(c)
             activeNotifications?.forEach { handle(it, true, first) }
             if (first) Store.setCatchInit(c)
         } catch (e: Exception) {}
+    }
+
+    override fun onDestroy() {
+        connected = false
+        super.onDestroy()
     }
 
     private fun handle(sbn: StatusBarNotification, catchUp: Boolean, markOnly: Boolean) {

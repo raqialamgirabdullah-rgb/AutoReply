@@ -18,7 +18,6 @@ import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
 import android.provider.Settings
-import android.service.notification.NotificationListenerService
 import android.text.SpannableStringBuilder
 import android.text.Spanned
 import android.text.style.ForegroundColorSpan
@@ -26,6 +25,7 @@ import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
+import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.Switch
@@ -38,10 +38,16 @@ import java.util.Date
 import java.util.Locale
 
 class MainActivity : Activity() {
-    private lateinit var root: LinearLayout
-    private lateinit var sv: ScrollView
-    private val repo = "raqialamgirabdullah-rgb/AutoReply"
-    private var update: Pair<Int, String>? = null // (নতুন সংস্করণ নম্বর, APK লিংক)
+    private lateinit var root: LinearLayout     // মূল পাতা: ব্যানার, মূল সুইচ, নিয়মের কার্ড
+    private lateinit var side: LinearLayout     // সাইডবার: বাকি সব অপশন
+    private lateinit var sideSv: ScrollView
+    private lateinit var scrim: View
+    private lateinit var dot: View
+    private var menuOpen = false
+    private var update: Updater.Info? = null
+    private var wantInstall = false             // আপডেট-নোটিফিকেশনে চেপে ঢুকলে সরাসরি ইনস্টল শুরু হবে
+    private var statusTv: TextView? = null
+    private var lastCheck = 0L
 
     private val ink = Color.parseColor("#EAF2F3")
     private val mute = Color.parseColor("#8FA3A8")
@@ -57,6 +63,8 @@ class MainActivity : Activity() {
     private val ticker = object : Runnable {
         override fun run() {
             fillLog()
+            fillStatus()
+            if (System.currentTimeMillis() - lastCheck > 5 * 60 * 1000L) refreshUpdate()
             handler.postDelayed(this, 3000)
         }
     }
@@ -65,12 +73,102 @@ class MainActivity : Activity() {
 
     override fun onCreate(s: Bundle?) {
         super.onCreate(s)
+        wantInstall = intent?.getBooleanExtra("upd", false) == true
+        val mp = ViewGroup.LayoutParams.MATCH_PARENT
+        val wc = ViewGroup.LayoutParams.WRAP_CONTENT
+
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(d(16), d(28), d(16), d(40))
+            setPadding(d(16), d(4), d(16), d(40))
         }
-        sv = ScrollView(this).apply { addView(root) }
-        setContentView(sv)
+        val sv = ScrollView(this).apply { addView(root) }
+
+        // ওপরের বার: বাঁয়ে নাম, ডানে থ্রি-লাইন মেনু
+        val bar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(d(16), d(26), d(6), d(6))
+        }
+        val ttl = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        ttl.addView(tv("AutoReply", 26f, bold = true))
+        ttl.addView(tv("মেসেজ এলে নিজে থেকে উত্তর", 12f, mute))
+        bar.addView(ttl, LinearLayout.LayoutParams(0, wc, 1f))
+
+        val menuBtn = FrameLayout(this)
+        val lines = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(d(14), d(14), d(14), d(14))
+        }
+        for (k in 0 until 3) {
+            val b = View(this)
+            b.background = rounded(ink, 2)
+            lines.addView(b, LinearLayout.LayoutParams(d(22), d(3)).apply { if (k > 0) topMargin = d(5) })
+        }
+        menuBtn.addView(lines)
+        dot = View(this)
+        dot.background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(warn) }
+        dot.visibility = View.GONE
+        menuBtn.addView(dot, FrameLayout.LayoutParams(d(10), d(10), Gravity.TOP or Gravity.END).apply {
+            topMargin = d(8)
+            rightMargin = d(8)
+        })
+        menuBtn.setOnClickListener { if (menuOpen) closeMenu() else openMenu() }
+        bar.addView(menuBtn, LinearLayout.LayoutParams(wc, wc))
+
+        val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        col.addView(bar, LinearLayout.LayoutParams(mp, wc))
+        col.addView(sv, LinearLayout.LayoutParams(mp, 0, 1f))
+
+        // সাইডবার (ডান পাশ থেকে স্লাইড করে আসে) ও তার পেছনের আবছা পর্দা
+        side = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(d(16), d(26), d(16), d(40))
+        }
+        sideSv = ScrollView(this).apply {
+            addView(side)
+            setBackgroundColor(Color.parseColor("#0B1115"))
+            visibility = View.GONE
+            isClickable = true
+        }
+        scrim = View(this).apply {
+            setBackgroundColor(Color.parseColor("#99000000"))
+            visibility = View.GONE
+            setOnClickListener { closeMenu() }
+        }
+        val frame = FrameLayout(this)
+        frame.addView(col, FrameLayout.LayoutParams(mp, mp))
+        frame.addView(scrim, FrameLayout.LayoutParams(mp, mp))
+        frame.addView(sideSv, FrameLayout.LayoutParams(d(310), mp, Gravity.END))
+        setContentView(frame)
+    }
+
+    private fun openMenu() {
+        if (menuOpen) return
+        menuOpen = true
+        scrim.alpha = 0f
+        scrim.visibility = View.VISIBLE
+        scrim.animate().alpha(1f).setDuration(180).start()
+        sideSv.visibility = View.VISIBLE
+        sideSv.translationX = d(310).toFloat()
+        sideSv.animate().translationX(0f).setDuration(200).start()
+    }
+
+    private fun closeMenu() {
+        if (!menuOpen) return
+        menuOpen = false
+        scrim.animate().alpha(0f).setDuration(160).withEndAction { if (!menuOpen) scrim.visibility = View.GONE }.start()
+        sideSv.animate().translationX(d(310).toFloat()).setDuration(180).withEndAction { if (!menuOpen) sideSv.visibility = View.GONE }.start()
+    }
+
+    @Suppress("DEPRECATION")
+    override fun onBackPressed() {
+        if (menuOpen) closeMenu() else super.onBackPressed()
+    }
+
+    override fun onNewIntent(i: Intent?) {
+        super.onNewIntent(i)
+        if (i != null) setIntent(i)
+        if (i?.getBooleanExtra("upd", false) == true) wantInstall = true
     }
 
     override fun onResume() {
@@ -78,10 +176,13 @@ class MainActivity : Activity() {
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
         }
+        Watchdog.schedule(this)
         if (Store.enabled(this)) KeepAliveService.start(this)
-        try { NotificationListenerService.requestRebind(ComponentName(this, ReplyService::class.java)) } catch (e: Exception) {}
+        Watchdog.rebind(this, false)
+        update = Updater.saved(this)
+        if (update == null) Updater.clearNotice(this)
         build()
-        check(false)
+        refreshUpdate()
         handler.removeCallbacks(ticker)
         handler.postDelayed(ticker, 3000)
     }
@@ -91,36 +192,22 @@ class MainActivity : Activity() {
         handler.removeCallbacks(ticker)
     }
 
-    private fun curVer(): Int {
-        @Suppress("DEPRECATION")
-        return packageManager.getPackageInfo(packageName, 0).versionCode
-    }
-
-    // GitHub-এর "latest release" লিংক কোন ট্যাগে যায় সেটা দেখে (API নয়, তাই রেট লিমিটে আটকায় না);
-    // ট্যাগের শেষ সংখ্যাই সংস্করণ নম্বর (v1.0.N)
-    private fun check(manual: Boolean) {
+    // নতুন সংস্করণ নিজে থেকে খোঁজে (অ্যাপ খুললে ও খোলা থাকলে ৫ মিনিট পরপর); কোনো বোতাম চাপতে হয় না
+    private fun refreshUpdate() {
+        lastCheck = System.currentTimeMillis()
+        val app = applicationContext
         Thread {
-            try {
-                val cn = URL("https://github.com/$repo/releases/latest").openConnection() as HttpURLConnection
-                cn.instanceFollowRedirects = false
-                cn.connectTimeout = 10000
-                cn.readTimeout = 10000
-                val tag = (cn.getHeaderField("Location") ?: "").substringAfterLast('/')
-                val v = tag.substringAfterLast('.').toInt()
-                val url = "https://github.com/$repo/releases/download/$tag/AutoReply.apk"
-                val now = if (v > curVer()) Pair(v, url) else null
-                runOnUiThread {
-                    val changed = now?.first != update?.first
-                    update = now
-                    if (changed || manual) build()
-                    if (manual && now == null) Toast.makeText(this, "আপনার সংস্করণই সর্বশেষ (সর্বশেষ প্রকাশিত: $v)", Toast.LENGTH_SHORT).show()
-                    if (manual && now != null) {
-                        Toast.makeText(this, "নতুন সংস্করণ পাওয়া গেছে ($v) — একদম ওপরে আপডেটের বোতাম আছে", Toast.LENGTH_LONG).show()
-                        sv.post { sv.fullScroll(View.FOCUS_UP) }
-                    }
+            val now = Updater.checkNow(app)
+            runOnUiThread {
+                if (isFinishing) return@runOnUiThread
+                val changed = now?.v != update?.v
+                update = now
+                if (changed) build()
+                val u = update
+                if (wantInstall) {
+                    wantInstall = false
+                    if (u != null) install(u.url)
                 }
-            } catch (e: Exception) {
-                if (manual) runOnUiThread { Toast.makeText(this, "চেক করা গেল না (${e.javaClass.simpleName}: ${e.message?.take(60)}), ইন্টারনেট দেখুন", Toast.LENGTH_LONG).show() }
             }
         }.start()
     }
@@ -162,8 +249,25 @@ class MainActivity : Activity() {
         }.start()
     }
 
-    private fun granted() =
-        (Settings.Secure.getString(contentResolver, "enabled_notification_listeners") ?: "").contains(packageName)
+    private fun granted() = Watchdog.granted(this)
+
+    // মূল পাতার সুইচের নিচের লেখা: নোটিফিকেশন-লিসেনার আসলেই সংযুক্ত কি না
+    private fun statusLine(): Pair<String, Int> {
+        return when {
+            !granted() -> Pair("✘ নোটিফিকেশন অ্যাক্সেস দেওয়া নেই", warn)
+            !Store.enabled(this) -> Pair("✔ অ্যাক্সেস আছে · এখন বন্ধ", mute)
+            ReplyService.connected -> Pair("✔ সংযুক্ত — ব্যাকগ্রাউন্ডে মেসেজের অপেক্ষায়", accent)
+            else -> Pair("⚠ সংযোগ নেই — আবার জোড়ার চেষ্টা চলছে", warn)
+        }
+    }
+
+    private fun fillStatus() {
+        val t = statusTv ?: return
+        val st = statusLine()
+        t.text = st.first
+        t.setTextColor(st.second)
+        if (Store.enabled(this) && !ReplyService.connected) Watchdog.rebind(this, false)
+    }
 
     // ---------- ডিজাইনের ছোট অংশগুলো ----------
     private fun rounded(fill: Int, r: Int, stroke: Int = 0): GradientDrawable {
@@ -245,6 +349,8 @@ class MainActivity : Activity() {
         return r
     }
 
+    private fun addSide(v: View, top: Int = 14) = addTo(side, v, top)
+
     // শেষ ঘটনা সাজিয়ে দেখায়; ৩ সেকেন্ড পরপর নিজে থেকে নতুন হয় (রিফ্রেশ বোতাম লাগে না)
     private fun fillLog() {
         val box = logBox ?: return
@@ -279,90 +385,111 @@ class MainActivity : Activity() {
         box.addView(res)
     }
 
+    private fun brand() = Build.MANUFACTURER.lowercase()
+
+    // ফোনের ব্র্যান্ড ধরে সেই ফোনের অটো-স্টার্ট/ব্যাকগ্রাউন্ড সেটিং পেজ সরাসরি খোলে; না পেলে অ্যাপের সেটিংস
+    private fun openAutostart() {
+        val m = brand()
+        val l = ArrayList<ComponentName>()
+        if (m.contains("xiaomi") || m.contains("redmi") || m.contains("poco")) {
+            l.add(ComponentName("com.miui.securitycenter", "com.miui.permcenter.autostart.AutoStartManagementActivity"))
+        }
+        if (m.contains("oppo") || m.contains("realme") || m.contains("oneplus")) {
+            l.add(ComponentName("com.coloros.safecenter", "com.coloros.safecenter.permission.startup.StartupAppListActivity"))
+            l.add(ComponentName("com.coloros.safecenter", "com.coloros.safecenter.startupapp.StartupAppListActivity"))
+            l.add(ComponentName("com.oppo.safe", "com.oppo.safe.permission.startup.StartupAppListActivity"))
+        }
+        if (m.contains("vivo") || m.contains("iqoo")) {
+            l.add(ComponentName("com.vivo.permissionmanager", "com.vivo.permissionmanager.activity.BgStartUpManagerActivity"))
+            l.add(ComponentName("com.iqoo.secure", "com.iqoo.secure.ui.phoneoptimize.AddWhiteListActivity"))
+        }
+        if (m.contains("huawei") || m.contains("honor")) {
+            l.add(ComponentName("com.huawei.systemmanager", "com.huawei.systemmanager.startupmgr.ui.StartupNormalAppListActivity"))
+            l.add(ComponentName("com.huawei.systemmanager", "com.huawei.systemmanager.optimize.process.ProtectActivity"))
+        }
+        if (m.contains("samsung")) {
+            l.add(ComponentName("com.samsung.android.lool", "com.samsung.android.sm.ui.battery.BatteryActivity"))
+            l.add(ComponentName("com.samsung.android.lool", "com.samsung.android.sm.battery.ui.BatteryActivity"))
+        }
+        if (m.contains("asus")) {
+            l.add(ComponentName("com.asus.mobilemanager", "com.asus.mobilemanager.autostart.AutoStartActivity"))
+        }
+        for (cn in l) {
+            try {
+                startActivity(Intent().setComponent(cn).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                return
+            } catch (e: Exception) {}
+        }
+        try {
+            startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
+            Toast.makeText(this, "অ্যাপের সেটিংস খোলা হয়েছে — সেখানে ব্যাটারি/Auto-start/ব্যাকগ্রাউন্ড অনুমতি চালু করুন", Toast.LENGTH_LONG).show()
+        } catch (e: Exception) {}
+    }
+
+    private fun guideUrl(): String {
+        val m = brand()
+        val slug = when {
+            m.contains("xiaomi") || m.contains("redmi") || m.contains("poco") -> "xiaomi"
+            m.contains("oppo") -> "oppo"
+            m.contains("realme") -> "realme"
+            m.contains("vivo") || m.contains("iqoo") -> "vivo"
+            m.contains("huawei") || m.contains("honor") -> "huawei"
+            m.contains("samsung") -> "samsung"
+            m.contains("oneplus") -> "oneplus"
+            else -> ""
+        }
+        return "https://dontkillmyapp.com/$slug"
+    }
+
     private fun build() {
         root.removeAllViews()
+        side.removeAllViews()
         val c = this
         val ok = granted()
         val on = Store.enabled(c)
-
-        add(tv("AutoReply", 30f, bold = true), 0)
-        add(tv("মেসেজ এলে নিজে থেকে উত্তর", 13f, mute), 2)
-
         val up = update
+        dot.visibility = if (up != null) View.VISIBLE else View.GONE
+        val free = getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(packageName)
+
+        // ========== মূল পাতা ==========
         if (up != null) {
             val u = card(accent)
-            title(u, "নতুন সংস্করণ আছে (${up.first})")
-            addTo(u, primary("আপডেট করুন") { install(up.second) }, 10)
-            addTo(u, ghost("ব্রাউজার দিয়ে ডাউনলোড করুন") { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(up.second))) }, 8)
-            add(u, 16)
+            title(u, "নতুন সংস্করণ এসেছে (${up.v})", "একবার চাপলেই ডাউনলোড ও ইনস্টল শুরু হবে।")
+            addTo(u, primary("আপডেট করুন") { install(up.url) }, 12)
+            add(u, 4)
         }
 
-        // মূল সুইচ ও অ্যাক্সেসের অবস্থা
         val main = card()
-        main.addView(
-            swRow(
-                if (on) "চালু আছে" else "বন্ধ আছে",
-                if (ok) "✔ নোটিফিকেশন অ্যাক্সেস দেওয়া আছে" else "✘ নোটিফিকেশন অ্যাক্সেস দেওয়া নেই",
-                on, true, if (ok) accent else warn
-            ) { v ->
-                Store.setEnabled(c, v)
-                if (v) KeepAliveService.start(c) else KeepAliveService.stop(c)
-                if (v && !granted()) Toast.makeText(c, "আগে নোটিফিকেশন অ্যাক্সেস দিন", Toast.LENGTH_LONG).show()
-                handler.post { build() }
-            }
-        )
+        val row = LinearLayout(this)
+        row.orientation = LinearLayout.HORIZONTAL
+        row.gravity = Gravity.CENTER_VERTICAL
+        val mc = LinearLayout(this)
+        mc.orientation = LinearLayout.VERTICAL
+        mc.addView(tv(if (on) "চালু আছে" else "বন্ধ আছে", 20f, bold = true))
+        val st = tv("", 12f, mute)
+        mc.addView(st)
+        statusTv = st
+        row.addView(mc, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        row.addView(sw(on) { v ->
+            Store.setEnabled(c, v)
+            if (v) {
+                KeepAliveService.start(c)
+                Watchdog.schedule(c)
+                Watchdog.rebind(c, false)
+            } else KeepAliveService.stop(c)
+            if (v && !granted()) Toast.makeText(c, "আগে নোটিফিকেশন অ্যাক্সেস দিন", Toast.LENGTH_LONG).show()
+            handler.post { build() }
+        })
+        main.addView(row)
+        fillStatus()
         if (!ok) {
             addTo(main, tv("অপশনটা ধূসর থাকলে: ফোনের Settings → Apps → এই অ্যাপ → ওপরে ডানে ⋮ → \"Allow restricted settings\" দিন, তারপর আবার চেষ্টা করুন।", 12f, mute), 10)
             addTo(main, primary("নোটিফিকেশন অ্যাক্সেস দিন") { startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }, 10)
+        } else if (on && !free) {
+            addTo(main, tv("অ্যাপ বন্ধ থাকলেও উত্তর যেতে ব্যাকগ্রাউন্ড সেটিং ঠিক করা দরকার।", 12f, mute), 10)
+            addTo(main, ghost("ব্যাকগ্রাউন্ড সেটিং ঠিক করুন", warn) { openMenu() }, 8)
         }
-        val tools = LinearLayout(this)
-        tools.orientation = LinearLayout.HORIZONTAL
-        if (ok) {
-            val g1 = ghost("অ্যাক্সেস সেটিংস") { startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }
-            tools.addView(g1, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { rightMargin = d(8) })
-        }
-        val free = getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(packageName)
-        val g2 = ghost(if (free) "✔ ব্যাটারি সেভার বন্ধ" else "ব্যাটারি সেভার বাদ দিন", if (free) accent else warn) {
-            try {
-                startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName")))
-            } catch (e: Exception) {
-                startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
-            }
-        }
-        tools.addView(g2, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        addTo(main, tools, 14)
-        addTo(
-            main,
-            tv("ব্যাকগ্রাউন্ডে ঠিকমতো চলতে: ফোনের Settings-এ এই অ্যাপের জন্য \"Auto-start\" ও \"ব্যাকগ্রাউন্ডে চলুক\" অনুমতি দিন এবং রিসেন্ট অ্যাপস থেকে অ্যাপটা লক করে রাখুন (ফোনভেদে নাম আলাদা)। ওপরের সুইচ চালু থাকলে ওপরের নোটিফিকেশন বারে একটা ছোট \"AutoReply চালু আছে\" নোটিফিকেশন থাকবে, ওটা সরাবেন না।", 12f, mute), 12
-        )
-        add(main, 16)
-
-        // শেষ ঘটনা
-        val act = card()
-        title(act, "সর্বশেষ কার্যকলাপ")
-        val lb = LinearLayout(this)
-        lb.orientation = LinearLayout.VERTICAL
-        addTo(act, lb, 10)
-        logBox = lb
-        logShown = "\u0000"
-        fillLog()
-        add(act, 14)
-
-        // অ্যাপ/কপির তালিকা
-        val apps = card()
-        title(apps, "কোন অ্যাপে চলবে", "একই অ্যাপের ক্লোন/ডুয়াল কপি থেকে একটা নোটিফিকেশন এলে এখানে নিজে যোগ হয়।")
-        val shown = HashSet<String>()
-        val fmt = SimpleDateFormat("dd MMM HH:mm", Locale.US)
-        fun row(pkg: String, uid: Int, sub: String?) {
-            addTo(apps, swRow(Store.label(pkg, uid), sub, Store.instOn(c, pkg, uid)) { v -> Store.setInstOn(c, pkg, uid, v) }, 12)
-            shown.add("$pkg@$uid")
-        }
-        for ((pkg, _) in Store.APPS) row(pkg, 0, null)
-        for (i in Store.insts(c)) {
-            if ("${i.pkg}@${i.uid}" in shown) continue
-            row(i.pkg, i.uid, "শেষ নোটিফিকেশন " + fmt.format(Date(i.t)))
-        }
-        add(apps, 14)
+        add(main, 12)
 
         // উত্তরের নিয়ম
         val rules = Store.rules(c)
@@ -400,16 +527,79 @@ class MainActivity : Activity() {
             addTo(rc, rb, 12)
         }
         addTo(rc, primary("+ নতুন নিয়ম") { edit(null, rules) }, 14)
-        add(rc, 14)
+        add(rc, 12)
 
-        val foot = tv("সংস্করণ ${curVer()}", 12f, mute)
-        foot.gravity = Gravity.CENTER
-        add(foot, 22)
-        val chk = tv("আপডেট আছে কি দেখুন", 13f, accent, true)
-        chk.gravity = Gravity.CENTER
-        chk.setPadding(0, d(10), 0, d(10))
-        chk.setOnClickListener { check(true) }
-        add(chk, 2)
+        // ========== সাইডবার ==========
+        val hd = LinearLayout(this)
+        hd.orientation = LinearLayout.HORIZONTAL
+        hd.gravity = Gravity.CENTER_VERTICAL
+        hd.addView(tv("মেনু", 22f, bold = true), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        val x = tv("✕", 20f, mute)
+        x.setPadding(d(12), d(6), d(4), d(6))
+        x.setOnClickListener { closeMenu() }
+        hd.addView(x)
+        addTo(side, hd, 0)
+
+        // নোটিফিকেশন অ্যাক্সেস
+        val acc = card()
+        title(acc, "নোটিফিকেশন অ্যাক্সেস", if (ok) "✔ দেওয়া আছে" else "✘ দেওয়া নেই — এটা ছাড়া উত্তর যাবে না")
+        addTo(acc, if (ok) ghost("অ্যাক্সেস সেটিংস") { startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }
+        else primary("নোটিফিকেশন অ্যাক্সেস দিন") { startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }, 10)
+        addSide(acc, 16)
+
+        // ব্যাকগ্রাউন্ডে চালু রাখা
+        val bg = card()
+        title(bg, "ব্যাকগ্রাউন্ডে চালু রাখা", "অ্যাপ বন্ধ থাকলেও উত্তর যেতে এই অনুমতিগুলো দরকার।")
+        addTo(bg, ghost(if (free) "✔ ব্যাটারি সেভার বন্ধ" else "ব্যাটারি সেভার বাদ দিন", if (free) accent else warn) {
+            try {
+                startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName")))
+            } catch (e: Exception) {
+                startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+            }
+        }, 12)
+        addTo(bg, ghost("Auto-start / ব্যাকগ্রাউন্ড অনুমতি") { openAutostart() }, 8)
+        addTo(bg, ghost("আমার ফোনের জন্য গাইড") { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(guideUrl()))) }, 8)
+        addTo(
+            bg,
+            tv("ফোনের Settings-এ এই অ্যাপের জন্য \"Auto-start\" ও \"ব্যাকগ্রাউন্ডে চলুক\" দিন এবং রিসেন্ট অ্যাপস থেকে অ্যাপটা লক করে রাখুন (ফোনভেদে নাম আলাদা)। সুইচ চালু থাকলে ওপরের বারে একটা ছোট \"AutoReply চালু আছে\" নোটিফিকেশন থাকবে, ওটা সরাবেন না।", 12f, mute), 12
+        )
+        addSide(bg, 14)
+
+        // শেষ ঘটনা
+        val act = card()
+        title(act, "সর্বশেষ কার্যকলাপ")
+        val lb = LinearLayout(this)
+        lb.orientation = LinearLayout.VERTICAL
+        addTo(act, lb, 10)
+        logBox = lb
+        logShown = "\u0000"
+        fillLog()
+        addSide(act, 14)
+
+        // অ্যাপ/কপির তালিকা
+        val apps = card()
+        title(apps, "কোন অ্যাপে চলবে", "একই অ্যাপের ক্লোন/ডুয়াল কপি থেকে একটা নোটিফিকেশন এলে এখানে নিজে যোগ হয়।")
+        val shown = HashSet<String>()
+        val fmt = SimpleDateFormat("dd MMM HH:mm", Locale.US)
+        fun arow(pkg: String, uid: Int, sub: String?) {
+            addTo(apps, swRow(Store.label(pkg, uid), sub, Store.instOn(c, pkg, uid)) { v -> Store.setInstOn(c, pkg, uid, v) }, 12)
+            shown.add("$pkg@$uid")
+        }
+        for ((pkg, _) in Store.APPS) arow(pkg, 0, null)
+        for (i in Store.insts(c)) {
+            if ("${i.pkg}@${i.uid}" in shown) continue
+            arow(i.pkg, i.uid, "শেষ নোটিফিকেশন " + fmt.format(Date(i.t)))
+        }
+        addSide(apps, 14)
+
+        // সংস্করণ ও আপডেট
+        val ver = card()
+        title(ver, "সংস্করণ ${Updater.curVer(c)}", if (up == null) "✔ আপনি সর্বশেষ সংস্করণে আছেন। নতুন সংস্করণ এলে অ্যাপ নিজেই জানাবে।" else "নতুন সংস্করণ আছে (${up.v})")
+        if (up != null) {
+            addTo(ver, primary("আপডেট করুন") { install(up.url) }, 10)
+            addTo(ver, ghost("ব্রাউজার দিয়ে ডাউনলোড করুন") { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(up.url))) }, 8)
+        }
+        addSide(ver, 14)
     }
 
     private fun edit(r: Rule?, rules: MutableList<Rule>) {

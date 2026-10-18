@@ -11,6 +11,7 @@ object Store {
     val APPS = linkedMapOf("com.whatsapp" to "WhatsApp", "com.whatsapp.w4b" to "WhatsApp Business", "com.facebook.orca" to "Messenger")
 
     private fun p(c: Context) = c.getSharedPreferences("s", Context.MODE_PRIVATE)
+    fun sp(c: Context) = p(c)
 
     fun enabled(c: Context) = p(c).getBoolean("on", false)
     fun setEnabled(c: Context, v: Boolean) = p(c).edit().putBoolean("on", v).apply()

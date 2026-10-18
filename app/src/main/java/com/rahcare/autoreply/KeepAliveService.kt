@@ -28,7 +28,19 @@ class KeepAliveService : Service() {
             .build()
         if (Build.VERSION.SDK_INT >= 34) startForeground(7, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
         else startForeground(7, n)
+        Watchdog.schedule(this)
         return START_STICKY
+    }
+
+    // রিসেন্টস থেকে সোয়াইপ করে সরালে বা ফোন সার্ভিস মেরে দিলে অ্যালার্ম দিয়ে আবার তোলা হয়
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+        if (Store.enabled(this)) Watchdog.schedule(this, 3000L)
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        if (Store.enabled(this)) Watchdog.schedule(this, 5000L)
     }
 
     companion object {
