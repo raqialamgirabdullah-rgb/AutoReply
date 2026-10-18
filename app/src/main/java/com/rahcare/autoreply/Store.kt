@@ -8,7 +8,14 @@ class Rule(var keys: String, var reply: String, var on: Boolean = true)
 
 object Store {
     // নতুন অ্যাপ যোগ করতে এই তালিকায় একটা লাইন বাড়ালেই হবে (প্যাকেজ নাম to দেখানোর নাম)
-    val APPS = linkedMapOf("com.whatsapp" to "WhatsApp", "com.whatsapp.w4b" to "WhatsApp Business", "com.facebook.orca" to "Messenger")
+    val APPS = linkedMapOf(
+        "com.whatsapp" to "WhatsApp",
+        "com.whatsapp.w4b" to "WhatsApp Business",
+        "com.facebook.orca" to "Messenger",
+        "com.facebook.lite" to "Facebook Lite",
+        "org.telegram.messenger" to "Telegram",
+        "com.imo.android.imoim" to "IMO"
+    )
 
     private fun p(c: Context) = c.getSharedPreferences("s", Context.MODE_PRIVATE)
     fun sp(c: Context) = p(c)
@@ -27,6 +34,9 @@ object Store {
             l.contains("w4b") -> "WhatsApp Business"
             l.contains("whatsapp") -> "WhatsApp"
             l.startsWith("com.facebook.orca") -> "Messenger"
+            l.startsWith("com.facebook.lite") -> "Facebook Lite"
+            l.startsWith("org.telegram.messenger") -> "Telegram"
+            l.startsWith("com.imo.android.imoim") -> "IMO"
             else -> null
         }
     }

@@ -1,4 +1,4 @@
 <resources>
     <string name="app_name">AutoReply</string>
-    <string name="a11y_desc">ফোন স্ক্রিন বন্ধ থাকলেও WhatsApp/Messenger-এর মেসেজ-নোটিফিকেশন ধরে দ্রুত স্বয়ংক্রিয় উত্তর পাঠাতে সাহায্য করে। পর্দার কিছু পড়ে না।</string>
+    <string name="a11y_desc">ফোন স্ক্রিন বন্ধ থাকলেও WhatsApp, Messenger, Telegram ইত্যাদির মেসেজ-নোটিফিকেশন ধরে দ্রুত স্বয়ংক্রিয় উত্তর পাঠাতে সাহায্য করে। পর্দার কিছু পড়ে না।</string>
 </resources>

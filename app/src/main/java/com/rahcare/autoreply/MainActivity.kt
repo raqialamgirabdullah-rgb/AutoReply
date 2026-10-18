@@ -38,8 +38,8 @@ import java.util.Date
 import java.util.Locale
 
 class MainActivity : Activity() {
-    private lateinit var root: LinearLayout     // মূল পাতা: ব্যানার, মূল সুইচ, নিয়মের কার্ড
-    private lateinit var side: LinearLayout     // সাইডবার: বাকি সব অপশন
+    private lateinit var root: LinearLayout     // মূল পাতা: শুধু উত্তরের নিয়মের কার্ড
+    private lateinit var side: LinearLayout     // সাইডবার: চালু/বন্ধ কার্ড ও বাকি সব অপশন
     private lateinit var sideSv: ScrollView
     private lateinit var scrim: View
     private lateinit var dot: View
@@ -48,7 +48,6 @@ class MainActivity : Activity() {
     private var wantInstall = false             // আপডেট-নোটিফিকেশনে চেপে ঢুকলে সরাসরি ইনস্টল শুরু হবে
     private var statusTv: TextView? = null
     private var lastCheck = 0L
-    private var evBox: TextView? = null
 
     private val ink = Color.parseColor("#EAF2F3")
     private val mute = Color.parseColor("#8FA3A8")
@@ -65,7 +64,6 @@ class MainActivity : Activity() {
         override fun run() {
             fillLog()
             fillStatus()
-            fillEv()
             if (System.currentTimeMillis() - lastCheck > 5 * 60 * 1000L) refreshUpdate()
             handler.postDelayed(this, 3000)
         }
@@ -264,16 +262,6 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun evText(): String {
-        val head = "ফোন: ${Build.MANUFACTURER} ${Build.MODEL}, Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT}), সংস্করণ ${Updater.curVer(this)}\n" +
-            "অ্যাক্সেস=${granted()} চালু=${Store.enabled(this)} সংযুক্ত=${ReplyService.connected} ব্যাটারি-ছাড়=${getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(packageName)}\n"
-        return head + Store.events(this).split('\n').takeLast(30).joinToString("\n")
-    }
-
-    private fun fillEv() {
-        evBox?.text = evText()
-    }
-
     private fun fillStatus() {
         val t = statusTv ?: return
         val st = statusLine()
@@ -439,21 +427,6 @@ class MainActivity : Activity() {
         } catch (e: Exception) {}
     }
 
-    private fun guideUrl(): String {
-        val m = brand()
-        val slug = when {
-            m.contains("xiaomi") || m.contains("redmi") || m.contains("poco") -> "xiaomi"
-            m.contains("oppo") -> "oppo"
-            m.contains("realme") -> "realme"
-            m.contains("vivo") || m.contains("iqoo") -> "vivo"
-            m.contains("huawei") || m.contains("honor") -> "huawei"
-            m.contains("samsung") -> "samsung"
-            m.contains("oneplus") -> "oneplus"
-            else -> ""
-        }
-        return "https://dontkillmyapp.com/$slug"
-    }
-
     private fun build() {
         root.removeAllViews()
         side.removeAllViews()
@@ -464,13 +437,16 @@ class MainActivity : Activity() {
         dot.visibility = if (up != null) View.VISIBLE else View.GONE
         val free = getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(packageName)
 
-        // ========== মূল পাতা ==========
-        if (up != null) {
-            val u = card(accent)
-            title(u, "নতুন সংস্করণ এসেছে (${up.v})", "একবার চাপলেই ডাউনলোড ও ইনস্টল শুরু হবে।")
-            addTo(u, primary("আপডেট করুন") { install(up.url) }, 12)
-            add(u, 4)
-        }
+        // ========== সাইডবার: মাথা ও চালু/বন্ধ কার্ড ==========
+        val hd = LinearLayout(this)
+        hd.orientation = LinearLayout.HORIZONTAL
+        hd.gravity = Gravity.CENTER_VERTICAL
+        hd.addView(tv("মেনু", 22f, bold = true), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        val x = tv("✕", 20f, mute)
+        x.setPadding(d(12), d(6), d(4), d(6))
+        x.setOnClickListener { closeMenu() }
+        hd.addView(x)
+        addTo(side, hd, 0)
 
         val main = card()
         val row = LinearLayout(this)
@@ -499,11 +475,11 @@ class MainActivity : Activity() {
             addTo(main, tv("অপশনটা ধূসর থাকলে: ফোনের Settings → Apps → এই অ্যাপ → ওপরে ডানে ⋮ → \"Allow restricted settings\" দিন, তারপর আবার চেষ্টা করুন।", 12f, mute), 10)
             addTo(main, primary("নোটিফিকেশন অ্যাক্সেস দিন") { startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }, 10)
         } else if (on && !free) {
-            addTo(main, tv("অ্যাপ বন্ধ থাকলেও উত্তর যেতে ব্যাকগ্রাউন্ড সেটিং ঠিক করা দরকার।", 12f, mute), 10)
-            addTo(main, ghost("ব্যাকগ্রাউন্ড সেটিং ঠিক করুন", warn) { openMenu() }, 8)
+            addTo(main, tv("অ্যাপ বন্ধ থাকলেও উত্তর যেতে নিচের \"ব্যাকগ্রাউন্ডে চালু রাখা\" অংশের সেটিং ঠিক করা দরকার।", 12f, warn), 10)
         }
-        add(main, 12)
+        addSide(main, 16)
 
+        // ========== মূল পাতা: শুধু উত্তরের নিয়ম ==========
         // উত্তরের নিয়ম
         val rules = Store.rules(c)
         val rc = card()
@@ -542,17 +518,7 @@ class MainActivity : Activity() {
         addTo(rc, primary("+ নতুন নিয়ম") { edit(null, rules) }, 14)
         add(rc, 12)
 
-        // ========== সাইডবার ==========
-        val hd = LinearLayout(this)
-        hd.orientation = LinearLayout.HORIZONTAL
-        hd.gravity = Gravity.CENTER_VERTICAL
-        hd.addView(tv("মেনু", 22f, bold = true), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        val x = tv("✕", 20f, mute)
-        x.setPadding(d(12), d(6), d(4), d(6))
-        x.setOnClickListener { closeMenu() }
-        hd.addView(x)
-        addTo(side, hd, 0)
-
+        // ========== সাইডবারের বাকি অংশ ==========
         // নোটিফিকেশন অ্যাক্সেস
         val acc = card()
         title(acc, "নোটিফিকেশন অ্যাক্সেস", if (ok) "✔ দেওয়া আছে" else "✘ দেওয়া নেই — এটা ছাড়া উত্তর যাবে না")
@@ -575,14 +541,6 @@ class MainActivity : Activity() {
             Store.setStrong(c, v)
             KeepAliveService.start(c)
         }, 12)
-        for ((pkg, name) in Store.APPS) {
-            val has = try { packageManager.getPackageInfo(pkg, 0); true } catch (e: Exception) { false }
-            if (has) addTo(bg, ghost("$name-এর ব্যাটারি সেটিং") {
-                try { startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$pkg"))) } catch (e: Exception) {}
-            }, 8)
-        }
-        addTo(bg, tv("মেসেজ পেতে দেরি হলে: ওপরের বোতামে চেপে অ্যাপের সেটিংসে গিয়ে Battery → \"Unrestricted / Allow background activity\" দিন এবং Auto-start চালু করুন।", 12f, mute), 8)
-        addTo(bg, ghost("আমার ফোনের জন্য গাইড") { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(guideUrl()))) }, 8)
         addTo(
             bg,
             tv("ফোনের Settings-এ এই অ্যাপের জন্য \"Auto-start\" ও \"ব্যাকগ্রাউন্ডে চলুক\" দিন এবং রিসেন্ট অ্যাপস থেকে অ্যাপটা লক করে রাখুন (ফোনভেদে নাম আলাদা)। সুইচ চালু থাকলে ওপরের বারে একটা ছোট \"AutoReply চালু আছে\" নোটিফিকেশন থাকবে, ওটা সরাবেন না।", 12f, mute), 12
@@ -593,7 +551,7 @@ class MainActivity : Activity() {
         val a11yOn = (Settings.Secure.getString(contentResolver, "enabled_accessibility_services") ?: "").contains("$packageName/")
         val ax = card()
         title(ax, "দ্রুত উত্তর সহায়ক (পরীক্ষামূলক)", if (a11yOn) "✔ চালু আছে" else "বন্ধ আছে")
-        addTo(ax, tv("কিছু ফোন স্ক্রিন বন্ধ থাকলে অ্যাপ থামিয়ে রাখে, তখন উত্তর দেরিতে যায়। এটা চালু করলে ওই সমস্যা এড়ানো যেতে পারে। শুধু WhatsApp/Messenger-এর নোটিফিকেশন-ঘটনা শোনে, পর্দার কিছু পড়ে না। চালু করতে: Accessibility → ইনস্টল করা অ্যাপ → AutoReply → চালু। অপশন ধূসর থাকলে অ্যাপের ইনফোতে ⋮ → \"Allow restricted settings\" দিন।", 12f, mute), 8)
+        addTo(ax, tv("কিছু ফোন স্ক্রিন বন্ধ থাকলে অ্যাপ থামিয়ে রাখে, তখন উত্তর দেরিতে যায়। এটা চালু করলে ওই সমস্যা এড়ানো যেতে পারে। শুধু WhatsApp, Messenger, Telegram ইত্যাদি মেসেজিং অ্যাপের নোটিফিকেশন-ঘটনা শোনে, পর্দার কিছু পড়ে না। চালু করতে: Accessibility → ইনস্টল করা অ্যাপ → AutoReply → চালু। অপশন ধূসর থাকলে অ্যাপের ইনফোতে ⋮ → \"Allow restricted settings\" দিন।", 12f, mute), 8)
         addTo(ax, ghost(if (a11yOn) "Accessibility সেটিংস" else "Accessibility চালু করুন") { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }, 10)
         addSide(ax, 14)
 
@@ -623,21 +581,6 @@ class MainActivity : Activity() {
             arow(i.pkg, i.uid, "শেষ নোটিফিকেশন " + fmt.format(Date(i.t)))
         }
         addSide(apps, 14)
-
-        // ডায়াগনস্টিক
-        val dg = card()
-        title(dg, "ডায়াগনস্টিক লগ", "অ্যাপ বন্ধ থাকলে কী ঘটছে তার রেকর্ড। সমস্যা হলে কপি করে পাঠান।")
-        val eb = tv("", 11f, mute)
-        eb.typeface = Typeface.MONOSPACE
-        addTo(dg, eb, 10)
-        evBox = eb
-        fillEv()
-        addTo(dg, ghost("কপি করুন") {
-            val cm = getSystemService(android.content.ClipboardManager::class.java)
-            cm.setPrimaryClip(android.content.ClipData.newPlainText("autoreply-log", evText()))
-            Toast.makeText(c, "কপি হয়েছে", Toast.LENGTH_SHORT).show()
-        }, 10)
-        addSide(dg, 14)
 
         // সংস্করণ ও আপডেট
         val ver = card()
