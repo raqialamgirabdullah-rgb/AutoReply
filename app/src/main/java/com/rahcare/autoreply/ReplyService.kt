@@ -16,19 +16,22 @@ class ReplyService : NotificationListenerService() {
     private val sent = HashSet<String>()             // আমাদের পাঠানো উত্তর (চক্র ঠেকাতে)
 
     // শেষ ঘটনার রেকর্ড, অ্যাপের মূল পাতায় দেখা যায়
-    private fun log(pkg: String, who: String, text: String, res: String) {
+    private fun log(pkg: String, uid: Int, who: String, text: String, res: String) {
         val t = SimpleDateFormat("HH:mm:ss", Locale.US).format(Date())
-        Store.setLog(applicationContext, "$t | ${Store.APPS[pkg] ?: pkg} | $who | \"$text\" → $res")
+        Store.setLog(applicationContext, "$t | ${Store.label(pkg, uid)} | $who | \"$text\" → $res")
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         val c = applicationContext
         val pkg = sbn.packageName
         val n = sbn.notification
-        if (pkg !in Store.APPS) {
-            if (pkg != packageName && n.actions?.any { a -> a.remoteInputs?.any { it.allowFreeFormInput } == true } == true) Store.addSeen(c, pkg)
-            return
-        }
+        if (pkg == packageName) return
+        val uid = sbn.userId
+        val canReply = n.actions?.any { a -> a.remoteInputs?.any { it.allowFreeFormInput } == true } == true
+        val fam = Store.family(pkg)
+        if (fam == null && !canReply) return // চেনা পরিবারের নয় এবং Reply-ও নেই: বাদ
+        Store.touch(c, pkg, uid)
+        if (fam == null && !Store.instOn(c, pkg, uid)) return // অচেনা অ্যাপ, ব্যবহারকারী চালু করেননি
         if ((n.flags and Notification.FLAG_GROUP_SUMMARY) != 0) return
         val ex = n.extras
 
@@ -46,13 +49,13 @@ class ReplyService : NotificationListenerService() {
         }
         if (text.isBlank()) return
 
-        if (!Store.enabled(c)) { log(pkg, sender, text, "মূল সুইচ বন্ধ"); return }
-        if (!Store.appOn(c, pkg)) { log(pkg, sender, text, "এই অ্যাপ বন্ধ করা আছে"); return }
+        if (!Store.enabled(c)) { log(pkg, uid, sender, text, "মূল সুইচ বন্ধ"); return }
+        if (!Store.instOn(c, pkg, uid)) { log(pkg, uid, sender, text, "এই অ্যাপ বন্ধ করা আছে"); return }
 
         // গ্রুপ চ্যাটে উত্তর পাঠানো হবে না
         val title = ex.getCharSequence("android.conversationTitle")?.toString()
         if (ex.getBoolean("android.isGroupConversation") || (title != null && title != sender)) {
-            log(pkg, sender, text, "গ্রুপ ধরা হয়েছে, তাই বাদ (title=$title)")
+            log(pkg, uid, sender, text, "গ্রুপ ধরা হয়েছে, তাই বাদ (title=$title)")
             return
         }
 
@@ -61,17 +64,17 @@ class ReplyService : NotificationListenerService() {
         if (text in sent) return // এটা আমাদেরই পাঠানো উত্তর
 
         val reply = Store.match(c, text)
-        if (reply == null) { log(pkg, sender, text, "কোনো নিয়ম মেলেনি"); return }
+        if (reply == null) { log(pkg, uid, sender, text, "কোনো নিয়ম মেলেনি"); return }
 
-        val key = "$pkg|$sender"
+        val key = "$pkg@$uid|$sender"
         val now = System.currentTimeMillis()
         if (now - (lastReply[key] ?: 0L) < Store.cooldown(c) * 1000L) {
-            log(pkg, sender, text, "অপেক্ষার সময় চলছে")
+            log(pkg, uid, sender, text, "অপেক্ষার সময় চলছে")
             return
         }
 
         val acts = n.actions
-        if (acts == null) { log(pkg, sender, text, "নোটিফিকেশনে কোনো বাটন নেই"); return }
+        if (acts == null) { log(pkg, uid, sender, text, "নোটিফিকেশনে কোনো বাটন নেই"); return }
         for (a in acts) {
             val ris = a.remoteInputs ?: continue
             val ri = ris.firstOrNull { it.allowFreeFormInput } ?: continue
@@ -79,10 +82,10 @@ class ReplyService : NotificationListenerService() {
             if (sent.size > 50) sent.clear()
             sent.add(reply)
             val err = send(a, ris, ri, reply)
-            log(pkg, sender, text, if (err == null) "উত্তর পাঠানো হয়েছে: $reply" else "পাঠাতে ব্যর্থ ($err)")
+            log(pkg, uid, sender, text, if (err == null) "উত্তর পাঠানো হয়েছে: $reply" else "পাঠাতে ব্যর্থ ($err)")
             return
         }
-        log(pkg, sender, text, "Reply বাটন পাওয়া যায়নি")
+        log(pkg, uid, sender, text, "Reply বাটন পাওয়া যায়নি")
     }
 
     private fun send(a: Notification.Action, ris: Array<RemoteInput>, ri: RemoteInput, text: String): String? {

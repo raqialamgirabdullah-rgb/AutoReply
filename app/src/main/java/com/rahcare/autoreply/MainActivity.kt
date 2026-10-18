@@ -26,6 +26,9 @@ import android.widget.TextView
 import android.widget.Toast
 import java.net.HttpURLConnection
 import java.net.URL
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class MainActivity : Activity() {
     private lateinit var root: LinearLayout
@@ -189,17 +192,28 @@ class MainActivity : Activity() {
         add(btn("রিফ্রেশ") { build() }, 4)
 
         add(tv("কোন কোন অ্যাপে চলবে", 17f, bold = true), 22)
-        for ((pkg, name) in Store.APPS) {
+        add(
+            tv(
+                "একই অ্যাপের একাধিক কপি (ক্লোন/ডুয়াল অ্যাপ) থাকলে প্রতিটা থেকে একটা নোটিফিকেশন আসার পর এখানে নিজে থেকে যোগ হবে। WhatsApp, WhatsApp Business ও Messenger-এর কপি আপনা-আপনি চালু থাকে; অন্য অচেনা অ্যাপ (Reply আছে এমন) টিক দিয়ে নিজে চালু করতে হবে।",
+                12f, mute
+            ), 2
+        )
+        val shown = HashSet<String>()
+        val fmt = SimpleDateFormat("dd MMM HH:mm", Locale.US)
+        fun row(pkg: String, uid: Int, extra: String) {
             val cb = CheckBox(this)
-            cb.text = name
+            cb.text = Store.label(pkg, uid) + extra
             cb.setTextColor(Color.WHITE)
-            cb.isChecked = Store.appOn(c, pkg)
-            cb.setOnCheckedChangeListener { _, v -> Store.setAppOn(c, pkg, v) }
+            cb.isChecked = Store.instOn(c, pkg, uid)
+            cb.setOnCheckedChangeListener { _, v -> Store.setInstOn(c, pkg, uid, v) }
             add(cb, 2)
+            shown.add("$pkg@$uid")
         }
-
-        val seen = Store.seen(c)
-        if (seen.isNotEmpty()) add(tv("Reply-সহ নোটিফিকেশন এসেছে, কিন্তু তালিকায় নেই: $seen", 12f, mute), 6)
+        for ((pkg, _) in Store.APPS) row(pkg, 0, "")
+        for (i in Store.insts(c)) {
+            if ("${i.pkg}@${i.uid}" in shown) continue
+            row(i.pkg, i.uid, "  · শেষ নোটিফিকেশন " + fmt.format(Date(i.t)))
+        }
 
         add(tv("একই ব্যক্তিকে আবার উত্তর দেওয়ার আগে অপেক্ষা (সেকেন্ড, ০ = অপেক্ষা নেই)", 14f, mute), 18)
         val cd = EditText(this)
