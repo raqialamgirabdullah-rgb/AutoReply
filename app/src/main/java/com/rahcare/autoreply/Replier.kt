@@ -13,7 +13,15 @@ import java.util.Locale
 object Replier {
     private val lastSeen = HashMap<String, String>() // নোটিফিকেশন -> শেষ দেখা মেসেজ (একই মেসেজে দুবার নয়)
     private val sent = HashSet<String>()             // আমাদের পাঠানো উত্তর (চক্র ঠেকাতে)
-    private val recent = HashMap<String, Long>()     // প্রেরক+লেখা -> কখন দেখা (দুই পথের মধ্যে দ্বিগুণ উত্তর ঠেকাতে)
+    // মেসেজের পরিচয় (প্রেরক+লেখা+মেসেজের নিজের সময়ছাপ) -> কখন দেখা। কাজ: একই মেসেজ দুই পথে (listener + accessibility) বা একই নোটিফিকেশন বারবার পোস্ট হলে দুবার উত্তর ঠেকানো।
+    // কোনো সময়সীমা নেই: নতুন মেসেজের সময়ছাপ আলাদা, তাই একই লেখা সাথে সাথে আবার এলেও সাথে সাথে উত্তর যায়। শুধু সংখ্যায় সীমিত (শেষ ৫০০টা মনে রাখে)।
+    private val recent = object : LinkedHashMap<String, Long>(16, 0.75f, false) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Long>?): Boolean = size > 500
+    }
+    // দুই পথের একটিতে সময়ছাপ না থাকলে একই মেসেজ আলাদা ভাবা হতে পারে: তাই শুধু "অন্য পথ থেকে ১.৫ সেকেন্ডের মধ্যে একই মেসেজ" দ্বিতীয়বার ধরা হয় না (একই পথের পরপর মেসেজে এর কোনো প্রভাব নেই)
+    private val lastPath = object : LinkedHashMap<String, Pair<Boolean, Long>>(16, 0.75f, false) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Pair<Boolean, Long>>?): Boolean = size > 200
+    }
 
     // শেষ ঘটনার রেকর্ড, অ্যাপের সাইডবারে দেখা যায়
     private fun log(c: Context, pkg: String, uid: Int, who: String, text: String, res: String) {
@@ -47,6 +55,8 @@ object Replier {
             }
         }
         if (text.isBlank()) return
+        // এই মেসেজের নিজস্ব সময়ছাপ (না থাকলে নোটিফিকেশনের when); একই মেসেজ হলে সবসময় একই, নতুন মেসেজ হলে আলাদা
+        val mid = if (stamp.isNotEmpty() && stamp != "0") stamp else if (n.`when` > 0L) "w" + n.`when` else ""
 
         if (!Store.enabled(c)) { log(c, pkg, uid, sender, text, "মূল সুইচ বন্ধ"); return }
         if (!Store.instOn(c, pkg, uid)) { log(c, pkg, uid, sender, text, "এই অ্যাপ বন্ধ করা আছে"); return }
@@ -60,15 +70,22 @@ object Replier {
 
         if (!catchUp) {
             val now = System.currentTimeMillis()
-            val dk = "$pkg|$sender|$text"
+            val dk = "$pkg|$sender|$text|$mid"
             val last = recent[dk]
-            if (last != null && now - last < 20000L) return
+            // সময়ছাপ থাকলে: একই মেসেজ আগে দেখা হলে বাদ (সময় যতই পার হোক)। সময়ছাপ একেবারেই না থাকলে: শুধু ৩ সেকেন্ডে একই মেসেজ দুই পথে এলে বাদ
+            if (last != null && (mid.isNotEmpty() || now - last < 3000L)) return
             recent[dk] = now
-            if (recent.size > 40) recent.entries.removeAll { now - it.value > 60000L }
+            val fromA11y = key.startsWith("a11y|")
+            val pk = "$pkg|$sender|$text"
+            val lp = lastPath[pk]
+            if (lp != null && lp.first != fromA11y && now - lp.second < 1500L) return
+            lastPath[pk] = Pair(fromA11y, now)
         }
-        if (lastSeen[key] == stamp + text) return
-        lastSeen[key] = stamp + text
-        val hid = key + "|" + stamp + "|" + text.hashCode()
+        if (mid.isNotEmpty()) {
+            if (lastSeen[key] == mid + text) return
+            lastSeen[key] = mid + text
+        }
+        val hid = key + "|" + mid + "|" + text.hashCode()
         if (catchUp && Store.handled(c, hid)) return
         Store.mark(c, hid)
         if (markOnly) return
