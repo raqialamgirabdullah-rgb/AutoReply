@@ -571,6 +571,13 @@ class MainActivity : Activity() {
             }
         }, 12)
         addTo(bg, ghost("Auto-start / ব্যাকগ্রাউন্ড অনুমতি") { openAutostart() }, 8)
+        for ((pkg, name) in Store.APPS) {
+            val has = try { packageManager.getPackageInfo(pkg, 0); true } catch (e: Exception) { false }
+            if (has) addTo(bg, ghost("$name-এর ব্যাটারি সেটিং") {
+                try { startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$pkg"))) } catch (e: Exception) {}
+            }, 8)
+        }
+        addTo(bg, tv("মেসেজ পেতে দেরি হলে: ওপরের বোতামে চেপে অ্যাপের সেটিংসে গিয়ে Battery → \"Unrestricted / Allow background activity\" দিন এবং Auto-start চালু করুন।", 12f, mute), 8)
         addTo(bg, ghost("আমার ফোনের জন্য গাইড") { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(guideUrl()))) }, 8)
         addTo(
             bg,

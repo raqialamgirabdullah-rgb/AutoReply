@@ -36,7 +36,9 @@ class ReplyService : NotificationListenerService() {
         val c = applicationContext
         if (Store.family(sbn.packageName) != null) {
             val ra = sbn.notification.actions?.any { a -> a.remoteInputs?.any { it.allowFreeFormInput } == true } == true
-            Store.ev(c, "নোটিফিকেশন এসেছে: ${sbn.packageName} reply-বাটন=$ra চালু=${Store.enabled(c)}")
+            val pm = getSystemService(PowerManager::class.java)
+            val tf = SimpleDateFormat("HH:mm:ss", Locale.US)
+            Store.ev(c, "নোটিফিকেশন এসেছে: ${sbn.packageName} reply-বাটন=$ra তৈরি=${tf.format(Date(sbn.postTime))} এখন=${tf.format(Date())} স্ক্রিন-চালু=${pm.isInteractive} ডজ=${pm.isDeviceIdleMode}")
         }
         // উত্তর পাঠানোর সময় সিপিইউ যেন ঘুমিয়ে না পড়ে
         var wl: PowerManager.WakeLock? = null

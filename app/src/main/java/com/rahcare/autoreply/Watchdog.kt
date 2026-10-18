@@ -47,7 +47,8 @@ object Watchdog {
 class WatchdogReceiver : BroadcastReceiver() {
     override fun onReceive(c: Context, i: Intent) {
         Watchdog.schedule(c)
-        Store.ev(c, "ওয়াচডগ জেগেছে: চালু=${Store.enabled(c)} সংযুক্ত=${ReplyService.connected}")
+        val pm = c.getSystemService(android.os.PowerManager::class.java)
+        Store.ev(c, "ওয়াচডগ জেগেছে: সংযুক্ত=${ReplyService.connected} স্ক্রিন-চালু=${pm.isInteractive} ডজ=${pm.isDeviceIdleMode}")
         if (Store.enabled(c)) {
             KeepAliveService.start(c)
             Watchdog.rebind(c, true)
