@@ -8,7 +8,7 @@ class Rule(var keys: String, var reply: String, var on: Boolean = true)
 
 object Store {
     // নতুন অ্যাপ যোগ করতে এই তালিকায় একটা লাইন বাড়ালেই হবে (প্যাকেজ নাম to দেখানোর নাম)
-    val APPS = linkedMapOf("com.whatsapp" to "WhatsApp", "com.facebook.orca" to "Messenger")
+    val APPS = linkedMapOf("com.whatsapp" to "WhatsApp", "com.whatsapp.w4b" to "WhatsApp Business", "com.facebook.orca" to "Messenger")
 
     private fun p(c: Context) = c.getSharedPreferences("s", Context.MODE_PRIVATE)
 
@@ -20,6 +20,13 @@ object Store {
 
     fun cooldown(c: Context) = p(c).getInt("cd", 0)
     fun setCooldown(c: Context, v: Int) = p(c).edit().putInt("cd", v).apply()
+
+    // তালিকার বাইরের যেসব অ্যাপ থেকে Reply-সহ নোটিফিকেশন এসেছে (সর্বশেষ ৬টা), অচেনা প্যাকেজ ধরতে
+    fun seen(c: Context) = p(c).getString("seen", "") ?: ""
+    fun addSeen(c: Context, pkg: String) {
+        val l = seen(c).split(',').filter { it.isNotEmpty() && it != pkg }
+        p(c).edit().putString("seen", (listOf(pkg) + l).take(6).joinToString(",")).apply()
+    }
 
     fun log(c: Context) = p(c).getString("log", "") ?: ""
     fun setLog(c: Context, v: String) = p(c).edit().putString("log", v).apply()

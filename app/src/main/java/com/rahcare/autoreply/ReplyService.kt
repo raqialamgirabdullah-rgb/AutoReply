@@ -24,8 +24,11 @@ class ReplyService : NotificationListenerService() {
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         val c = applicationContext
         val pkg = sbn.packageName
-        if (pkg !in Store.APPS) return
         val n = sbn.notification
+        if (pkg !in Store.APPS) {
+            if (pkg != packageName && n.actions?.any { a -> a.remoteInputs?.any { it.allowFreeFormInput } == true } == true) Store.addSeen(c, pkg)
+            return
+        }
         if ((n.flags and Notification.FLAG_GROUP_SUMMARY) != 0) return
         val ex = n.extras
 

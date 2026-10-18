@@ -198,6 +198,9 @@ class MainActivity : Activity() {
             add(cb, 2)
         }
 
+        val seen = Store.seen(c)
+        if (seen.isNotEmpty()) add(tv("Reply-সহ নোটিফিকেশন এসেছে, কিন্তু তালিকায় নেই: $seen", 12f, mute), 6)
+
         add(tv("একই ব্যক্তিকে আবার উত্তর দেওয়ার আগে অপেক্ষা (সেকেন্ড, ০ = অপেক্ষা নেই)", 14f, mute), 18)
         val cd = EditText(this)
         cd.inputType = InputType.TYPE_CLASS_NUMBER
