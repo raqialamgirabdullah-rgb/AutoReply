@@ -26,8 +26,8 @@ class KeepAliveService : Service() {
     private val tick = object : Runnable {
         override fun run() {
             val now = System.currentTimeMillis()
-            if (lastTick != 0L && now - lastTick > 40000L) {
-                Store.ev(this@KeepAliveService, "প্রসেস ${(now - lastTick) / 1000} সেকেন্ড থেমে/ঘুমিয়ে ছিল")
+            if (lastTick != 0L && now - lastTick > 15000L) {
+                Store.ev(this@KeepAliveService, "প্রসেস ${(now - lastTick) / 1000} সেকেন্ড থেমে/ঘুমিয়ে ছিল (স্ক্রিন-চালু=${getSystemService(PowerManager::class.java).isInteractive})")
             }
             lastTick = now
             h.postDelayed(this, 10000L)

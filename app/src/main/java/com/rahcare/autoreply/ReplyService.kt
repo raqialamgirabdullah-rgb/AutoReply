@@ -1,10 +1,6 @@
 package com.rahcare.autoreply
 
-import android.app.Notification
-import android.app.RemoteInput
 import android.content.ComponentName
-import android.content.Intent
-import android.os.Bundle
 import android.os.PowerManager
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
@@ -13,15 +9,6 @@ import java.util.Date
 import java.util.Locale
 
 class ReplyService : NotificationListenerService() {
-    private val lastSeen = HashMap<String, String>() // নোটিফিকেশন -> শেষ দেখা মেসেজ (একই মেসেজে দুবার নয়)
-    private val sent = HashSet<String>()             // আমাদের পাঠানো উত্তর (চক্র ঠেকাতে)
-
-    // শেষ ঘটনার রেকর্ড, অ্যাপের মূল পাতায় দেখা যায়
-    private fun log(pkg: String, uid: Int, who: String, text: String, res: String) {
-        val t = SimpleDateFormat("HH:mm:ss", Locale.US).format(Date())
-        Store.setLog(applicationContext, "$t | ${Store.label(pkg, uid)} | $who | \"$text\" — $res")
-    }
-
     companion object {
         // সিস্টেম সত্যিই লিসেনার জুড়ে দিয়েছে কি না (মূল পাতায় আসল অবস্থা দেখানোর জন্য)
         @Volatile var connected = false
@@ -47,7 +34,7 @@ class ReplyService : NotificationListenerService() {
             wl.acquire(15000L)
         } catch (e: Exception) {}
         try {
-            handle(sbn, false, false)
+            Replier.handle(c, sbn.packageName, sbn.userId, sbn.key, sbn.postTime, sbn.notification, false, false)
         } catch (e: Exception) {
             Store.ev(c, "handle ব্যর্থ: ${e.javaClass.simpleName} ${e.message}")
         } finally {
@@ -74,7 +61,7 @@ class ReplyService : NotificationListenerService() {
         if (Store.enabled(c)) KeepAliveService.start(c)
         try {
             val first = !Store.catchInit(c)
-            activeNotifications?.forEach { handle(it, true, first) }
+            activeNotifications?.forEach { Replier.handle(c, it.packageName, it.userId, it.key, it.postTime, it.notification, true, first) }
             if (first) Store.setCatchInit(c)
         } catch (e: Exception) {}
     }
@@ -83,83 +70,5 @@ class ReplyService : NotificationListenerService() {
         connected = false
         Store.ev(applicationContext, "ReplyService ধ্বংস হয়েছে")
         super.onDestroy()
-    }
-
-    private fun handle(sbn: StatusBarNotification, catchUp: Boolean, markOnly: Boolean) {
-        val c = applicationContext
-        if (catchUp && System.currentTimeMillis() - sbn.postTime > 30 * 60 * 1000L) return
-        val pkg = sbn.packageName
-        val n = sbn.notification
-        if (pkg == packageName) return
-        val uid = sbn.userId
-        val canReply = n.actions?.any { a -> a.remoteInputs?.any { it.allowFreeFormInput } == true } == true
-        val fam = Store.family(pkg)
-        if (fam == null && !canReply) return // চেনা পরিবারের নয় এবং Reply-ও নেই: বাদ
-        Store.touch(c, pkg, uid)
-        if (fam == null && !Store.instOn(c, pkg, uid)) return // অচেনা অ্যাপ, ব্যবহারকারী চালু করেননি
-        if ((n.flags and Notification.FLAG_GROUP_SUMMARY) != 0) return
-        val ex = n.extras
-
-        var text = ex.getCharSequence("android.text")?.toString() ?: ""
-        var sender = ex.getCharSequence("android.title")?.toString() ?: ""
-        var stamp = ""
-        val msgs = ex.getParcelableArray("android.messages")
-        if (msgs != null && msgs.isNotEmpty()) {
-            val b = msgs.last() as? Bundle
-            if (b != null) {
-                b.getCharSequence("text")?.let { text = it.toString() }
-                b.getCharSequence("sender")?.let { sender = it.toString() }
-                stamp = b.getLong("time").toString()
-            }
-        }
-        if (text.isBlank()) return
-
-        if (!Store.enabled(c)) { log(pkg, uid, sender, text, "মূল সুইচ বন্ধ"); return }
-        if (!Store.instOn(c, pkg, uid)) { log(pkg, uid, sender, text, "এই অ্যাপ বন্ধ করা আছে"); return }
-
-        // গ্রুপ চ্যাটে উত্তর পাঠানো হবে না
-        val title = ex.getCharSequence("android.conversationTitle")?.toString()
-        if (ex.getBoolean("android.isGroupConversation") || (title != null && title != sender)) {
-            log(pkg, uid, sender, text, "গ্রুপ ধরা হয়েছে, তাই বাদ (title=$title)")
-            return
-        }
-
-        if (lastSeen[sbn.key] == stamp + text) return
-        lastSeen[sbn.key] = stamp + text
-        val hid = sbn.key + "|" + stamp + "|" + text.hashCode()
-        if (catchUp && Store.handled(c, hid)) return
-        Store.mark(c, hid)
-        if (markOnly) return
-        if (text in sent) return // এটা আমাদেরই পাঠানো উত্তর
-
-        val reply = Store.match(c, text)
-        if (reply == null) { log(pkg, uid, sender, text, "কোনো নিয়ম মেলেনি"); return }
-
-        val acts = n.actions
-        if (acts == null) { log(pkg, uid, sender, text, "নোটিফিকেশনে কোনো বাটন নেই"); return }
-        for (a in acts) {
-            val ris = a.remoteInputs ?: continue
-            val ri = ris.firstOrNull { it.allowFreeFormInput } ?: continue
-            if (sent.size > 50) sent.clear()
-            sent.add(reply)
-            val err = send(a, ris, ri, reply)
-            Store.ev(c, "উত্তর পাঠানোর ফল: " + (err ?: "সফল"))
-            log(pkg, uid, sender, text, if (err == null) "উত্তর পাঠানো হয়েছে: $reply" else "পাঠাতে ব্যর্থ ($err)")
-            return
-        }
-        log(pkg, uid, sender, text, "Reply বাটন পাওয়া যায়নি")
-    }
-
-    private fun send(a: Notification.Action, ris: Array<RemoteInput>, ri: RemoteInput, text: String): String? {
-        return try {
-            val i = Intent()
-            val b = Bundle()
-            b.putCharSequence(ri.resultKey, text)
-            RemoteInput.addResultsToIntent(ris, i, b)
-            a.actionIntent.send(applicationContext, 0, i)
-            null
-        } catch (e: Exception) {
-            e.javaClass.simpleName
-        }
     }
 }

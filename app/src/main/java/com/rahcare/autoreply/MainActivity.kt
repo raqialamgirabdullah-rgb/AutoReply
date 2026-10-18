@@ -589,6 +589,14 @@ class MainActivity : Activity() {
         )
         addSide(bg, 14)
 
+        // দ্রুত উত্তর সহায়ক (Accessibility)
+        val a11yOn = (Settings.Secure.getString(contentResolver, "enabled_accessibility_services") ?: "").contains("$packageName/")
+        val ax = card()
+        title(ax, "দ্রুত উত্তর সহায়ক (পরীক্ষামূলক)", if (a11yOn) "✔ চালু আছে" else "বন্ধ আছে")
+        addTo(ax, tv("কিছু ফোন স্ক্রিন বন্ধ থাকলে অ্যাপ থামিয়ে রাখে, তখন উত্তর দেরিতে যায়। এটা চালু করলে ওই সমস্যা এড়ানো যেতে পারে। শুধু WhatsApp/Messenger-এর নোটিফিকেশন-ঘটনা শোনে, পর্দার কিছু পড়ে না। চালু করতে: Accessibility → ইনস্টল করা অ্যাপ → AutoReply → চালু। অপশন ধূসর থাকলে অ্যাপের ইনফোতে ⋮ → \"Allow restricted settings\" দিন।", 12f, mute), 8)
+        addTo(ax, ghost(if (a11yOn) "Accessibility সেটিংস" else "Accessibility চালু করুন") { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }, 10)
+        addSide(ax, 14)
+
         // শেষ ঘটনা
         val act = card()
         title(act, "সর্বশেষ কার্যকলাপ")
