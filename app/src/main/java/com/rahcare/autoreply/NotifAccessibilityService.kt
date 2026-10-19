@@ -5,7 +5,7 @@ import android.app.Notification
 import android.view.accessibility.AccessibilityEvent
 
 // দ্বিতীয় পথ: কিছু ফোন স্ক্রিন বন্ধ থাকলে অ্যাপের প্রসেস থামিয়ে রাখে, কিন্তু চালু থাকা Accessibility সার্ভিসে সাধারণত হাত দেয় না।
-// শুধু চেনা মেসেজিং অ্যাপের (WhatsApp, Messenger, Facebook Lite, Telegram, IMO) নোটিফিকেশন-ঘটনা শোনে (accessibility_config.xml-এ সীমাবদ্ধ); পর্দার কিছু পড়ে না।
+// শুধু চেনা মেসেজিং অ্যাপের (WhatsApp, Messenger, Facebook Lite, Telegram) নোটিফিকেশন-ঘটনা শোনে (accessibility_config.xml-এ সীমাবদ্ধ); পর্দার কিছু পড়ে না।
 class NotifAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()

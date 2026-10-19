@@ -13,8 +13,7 @@ object Store {
         "com.whatsapp.w4b" to "WhatsApp Business",
         "com.facebook.orca" to "Messenger",
         "com.facebook.lite" to "Facebook Lite",
-        "org.telegram.messenger" to "Telegram",
-        "com.imo.android.imoim" to "IMO"
+        "org.telegram.messenger" to "Telegram"
     )
 
     private fun p(c: Context) = c.getSharedPreferences("s", Context.MODE_PRIVATE)
@@ -35,7 +34,6 @@ object Store {
             l.contains("whatsapp") -> "WhatsApp"
             l.startsWith("com.facebook.orca") || l.startsWith("com.facebook.lite") -> "Facebook" // Messenger ও Facebook Lite (ক্লোনসহ) সব এক
             l.startsWith("org.telegram.messenger") -> "Telegram"
-            l.startsWith("com.imo.android.imoim") -> "IMO"
             else -> null
         }
     }
