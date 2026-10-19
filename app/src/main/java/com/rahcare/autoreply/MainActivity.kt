@@ -753,7 +753,24 @@ class MainActivity : Activity() {
         val ver = card()
         title(ver, "সংস্করণ ${Updater.curVer(c)}")
         if (up == null) bullets(ver, listOf("আপনি সর্বশেষ সংস্করণে আছেন", "নতুন সংস্করণ এলে অ্যাপ নিজেই জানাবে"), 6)
+        addTo(ver, ghost("Auto Reply শেয়ার করুন") { shareApp() }, 12)
         addSide(ver, 14)
+    }
+
+    // অ্যাপের APK "Auto Reply.apk" নামে শেয়ার (ফাইলের নাম ApkShareProvider ঠিক করে)
+    private fun shareApp() {
+        try {
+            val u = ApkShareProvider.uri(this)
+            val i = Intent(Intent.ACTION_SEND)
+            i.type = "application/vnd.android.package-archive"
+            i.putExtra(Intent.EXTRA_STREAM, u)
+            i.putExtra(Intent.EXTRA_SUBJECT, "Auto Reply")
+            i.clipData = android.content.ClipData.newRawUri(ApkShareProvider.NAME, u)
+            i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            startActivity(Intent.createChooser(i, "Auto Reply শেয়ার করুন"))
+        } catch (e: Exception) {
+            Toast.makeText(this, "শেয়ার করা যায়নি", Toast.LENGTH_LONG).show()
+        }
     }
 
     // AI সেটিংস: একটাই API কী-র ঘর (চাবি দেখে প্রোভাইডার নিজে চেনা হয়), প্রতিষ্ঠানের তথ্য, পরীক্ষা; বাকি সব "উন্নত"-এর ভেতরে
