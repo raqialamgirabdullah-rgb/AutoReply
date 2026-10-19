@@ -108,8 +108,9 @@ jobs:
             কঠোর নিষেধ: main-এ সরাসরি পুশ নয়; .github/workflows, সাইনিং-সংক্রান্ত ফাইল, বা কোনো সিক্রেট ছোঁবে না।
             কাজটা করা সম্ভব না হলে কোড না বদলে ইস্যুতে কমেন্ট করে কারণ জানাও।
 
-      - name: Report failure to the issue
-        if: always() && steps.gemini.outcome != 'success'
+      - name: Report result to the issue
+        id: report
+        if: always()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
@@ -120,10 +121,14 @@ jobs:
           G_SUMMARY: ${{ steps.gemini.outputs.summary }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
+          PRS=$(gh pr list --head "gemini/issue-$ISSUE_NUMBER" --state open --json number --jq length 2>/dev/null || echo 0)
+          if [ "$OUTCOME" = "success" ] && [ "${PRS:-0}" -gt 0 ]; then echo "nopr=false" >> "$GITHUB_OUTPUT"; exit 0; fi
+          echo "nopr=true" >> "$GITHUB_OUTPUT"
           {
-            echo "Gemini রান: **$OUTCOME** — ব্যবহৃত মডেল: ${KEY_MODEL:-কোনোটিই কাজ করেনি}; মডেল পরীক্ষা: ${KEY_MODELS:-?}"
+            echo "Gemini রান: **$OUTCOME**$( [ "${PRS:-0}" -eq 0 ] && echo ' — কিন্তু কোনো পুল রিকোয়েস্ট খোলা হয়নি' )"
+            echo "ব্যবহৃত মডেল: ${KEY_MODEL:-কোনোটিই কাজ করেনি}; মডেল পরীক্ষা: ${KEY_MODELS:-?}"
             if [ -n "$G_ERROR" ]; then echo; echo "ত্রুটি:"; echo '```'; printf '%s' "$G_ERROR" | grep -v 'at ' | tail -c 1500; echo; echo '```'; fi
-            if [ "$OUTCOME" != "success" ] && [ -n "$G_SUMMARY" ]; then echo; echo "আউটপুট:"; echo '```'; printf '%s' "$G_SUMMARY" | head -c 1200; echo; echo '```'; fi
+            if [ -n "$G_SUMMARY" ]; then echo; echo "আউটপুট:"; echo '```'; printf '%s' "$G_SUMMARY" | head -c 1200; echo; echo '```'; fi
             echo; echo "[রানের লিংক]($RUN_URL)"
           } > /tmp/report.md
           python3 - >> /tmp/report.md <<'PY'
@@ -140,6 +145,6 @@ jobs:
           PY
           gh issue comment "$ISSUE_NUMBER" --body-file /tmp/report.md
 
-      - name: Fail the job if Gemini failed
-        if: steps.gemini.outcome == 'failure'
+      - name: Fail the job if Gemini failed or opened no PR
+        if: always() && (steps.gemini.outcome == 'failure' || steps.report.outputs.nopr == 'true')
         run: exit 1
