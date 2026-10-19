@@ -33,7 +33,21 @@ jobs:
           git config user.name "gemini-agent"
           git config user.email "gemini-agent@users.noreply.github.com"
 
+      - name: Check Gemini key
+        id: keycheck
+        continue-on-error: true
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          code=$(curl -s -o /tmp/r.json -w '%{http_code}' -H "x-goog-api-key: $GEMINI_API_KEY" -H 'Content-Type: application/json' -d '{"contents":[{"parts":[{"text":"hi"}]}]}' "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent" || echo 000)
+          msg=$(python3 -c "import json;d=json.load(open('/tmp/r.json'));print(((d.get('error') or {}).get('message') or 'ok')[:300].replace('\n',' '))" 2>/dev/null || echo "unparsed")
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "msg=$msg" >> "$GITHUB_OUTPUT"
+          echo "Gemini key check: HTTP $code - $msg"
+
       - name: Run Gemini
+        id: gemini
+        continue-on-error: true
         uses: google-github-actions/run-gemini-cli@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -68,3 +82,23 @@ jobs:
             5. `gh issue comment $ISSUE_NUMBER --body "<কী করলে ও কেন, এক-দুই লাইনে>"` দিয়ে সারসংক্ষেপ জানাও।
             কঠোর নিষেধ: main-এ সরাসরি পুশ নয়; .github/workflows, সাইনিং-সংক্রান্ত ফাইল, বা কোনো সিক্রেট ছোঁবে না।
             কাজটা করা সম্ভব না হলে কোড না বদলে ইস্যুতে কমেন্ট করে কারণ জানাও।
+
+      - name: Report result to the issue
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          OUTCOME: ${{ steps.gemini.outcome }}
+          KEY_CODE: ${{ steps.keycheck.outputs.code }}
+          KEY_MSG: ${{ steps.keycheck.outputs.msg }}
+          G_ERROR: ${{ steps.gemini.outputs.error }}
+          G_SUMMARY: ${{ steps.gemini.outputs.summary }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          {
+            echo "Gemini রান: **$OUTCOME** (API কী পরীক্ষা: HTTP ${KEY_CODE:-?} - ${KEY_MSG:-?})"
+            if [ -n "$G_ERROR" ]; then echo; echo "ত্রুটি:"; echo '```'; printf '%s' "$G_ERROR" | head -c 1500; echo; echo '```'; fi
+            if [ "$OUTCOME" != "success" ] && [ -n "$G_SUMMARY" ]; then echo; echo "আউটপুট:"; echo '```'; printf '%s' "$G_SUMMARY" | head -c 1200; echo; echo '```'; fi
+            echo; echo "[রানের লিংক]($RUN_URL)"
+          } > /tmp/report.md
+          gh issue comment "$ISSUE_NUMBER" --body-file /tmp/report.md
