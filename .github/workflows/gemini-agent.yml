@@ -57,6 +57,7 @@ jobs:
           REPO: ${{ github.repository }}
         with:
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+          gemini_model: gemini-flash-latest   # ডিফল্ট মডেল প্রায়ই 503 (চাপ বেশি) দেয়; এই মডেলে কী কাজ করে
           settings: |-
             {
               "tools": {
