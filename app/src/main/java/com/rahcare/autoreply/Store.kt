@@ -84,11 +84,14 @@ object Store {
     class Inst(val pkg: String, val uid: Int, var t: Long)
     private val touched = HashMap<String, Long>()
 
+    // যে অ্যাপগুলো একেবারেই বাদ (তালিকায় আসে না, উত্তরও যায় না): IMO-তে Reply বাটন নেই
+    fun ignored(pkg: String) = pkg.startsWith("com.imo.")
+
     fun insts(c: Context): MutableList<Inst> {
         val s = p(c).getString("insts", null) ?: return mutableListOf()
         return try {
             val a = JSONArray(s)
-            MutableList(a.length()) { val o = a.getJSONObject(it); Inst(o.getString("p"), o.getInt("u"), o.getLong("t")) }
+            MutableList(a.length()) { val o = a.getJSONObject(it); Inst(o.getString("p"), o.getInt("u"), o.getLong("t")) }.filter { !ignored(it.pkg) }.toMutableList()
         } catch (e: Exception) { mutableListOf() }
     }
 
@@ -141,7 +144,7 @@ object Store {
     // ---------- AI স্বয়ংক্রিয় চ্যাট: নিয়ম না মিললে প্রতিষ্ঠানের তথ্য থেকে AI উত্তর দেয় ----------
     fun aiOn(c: Context) = p(c).getBoolean("ai_on", false)
     fun setAiOn(c: Context, v: Boolean) = p(c).edit().putBoolean("ai_on", v).apply()
-    fun aiProvider(c: Context) = p(c).getString("ai_prov", "gemini") ?: "gemini"
+    fun aiProvider(c: Context) = p(c).getString("ai_prov", "auto") ?: "auto"
     fun aiKey(c: Context) = p(c).getString("ai_key", "") ?: ""
     fun aiModel(c: Context) = p(c).getString("ai_model", "") ?: ""
     fun aiBase(c: Context) = p(c).getString("ai_base", "") ?: ""

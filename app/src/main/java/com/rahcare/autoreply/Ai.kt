@@ -6,7 +6,7 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 
-// AI সেটিংস: প্রোভাইডার ("gemini", "claude" বা "openai"), API কী, মডেল, (OpenAI-সামঞ্জস্যপূর্ণের জন্য) base URL, প্রতিষ্ঠানের তথ্য
+// AI সেটিংস: প্রোভাইডার ("auto" = চাবি দেখে নিজে চেনে; অথবা "gemini", "claude", "openai"), API কী, মডেল, (OpenAI-সামঞ্জস্যপূর্ণের জন্য) base URL, প্রতিষ্ঠানের তথ্য
 class AiCfg(val prov: String, val key: String, val model: String, val base: String, val info: String)
 
 // কাস্টমারের প্রশ্ন + আগে থেকে দেওয়া প্রতিষ্ঠানের তথ্য -> AI-এর তৈরি উত্তর।
@@ -15,6 +15,36 @@ object Ai {
     const val DEF_GEMINI_MODEL = "gemini-flash-latest"   // সবসময় সর্বশেষ flash মডেল (রাহ কেয়ারের API Key Test পেজে এই নামেই চ্যাট চলেছে)
     const val DEF_CLAUDE_MODEL = "claude-haiku-5-5"
     const val DEF_OPENAI_BASE = "https://api.openai.com/v1"
+
+    // চাবি দেখে চেনা প্রোভাইডার: id (gemini/claude/openai), দেখানোর নাম, OpenAI-সামঞ্জস্যপূর্ণ হলে base URL, ডিফল্ট মডেল
+    class Det(val id: String, val label: String, val base: String, val model: String)
+
+    // শুধু চাবির শুরুর অংশ দেখে চেনা হয় (চাবি কোথাও যাচাই করতে পাঠানো হয় না)। চিনতে না পারলে null
+    fun detect(key: String): Det? {
+        val k = key.trim()
+        return when {
+            k.isEmpty() -> null
+            k.startsWith("AQ.") || k.startsWith("AIza") -> Det("gemini", "Gemini", "", DEF_GEMINI_MODEL)
+            k.startsWith("sk-ant-") -> Det("claude", "Claude", "", DEF_CLAUDE_MODEL)
+            k.startsWith("sk-or-") -> Det("openai", "OpenRouter", "https://openrouter.ai/api/v1", "openrouter/auto")
+            k.startsWith("gsk_") -> Det("openai", "Groq", "https://api.groq.com/openai/v1", "llama-3.3-70b-versatile")
+            k.startsWith("xai-") -> Det("openai", "xAI", "https://api.x.ai/v1", "grok-3-mini")
+            k.startsWith("sk-") -> Det("openai", "OpenAI", DEF_OPENAI_BASE, "gpt-4o-mini")
+            else -> null
+        }
+    }
+
+    // সেটিংস + চাবি থেকে আসলে কোন প্রোভাইডার/মডেল/base ব্যবহার হবে। চাবি চেনা গেলে সেটাই জেতে; না গেলে ব্যবহারকারীর বেছে নেওয়া প্রোভাইডার
+    fun eff(g: AiCfg): Det? {
+        val a = detect(g.key)
+        val id = a?.id ?: g.prov.takeIf { it == "gemini" || it == "claude" || it == "openai" } ?: return null
+        val m = g.model.trim().removePrefix("models/")
+        return when (id) {
+            "gemini" -> Det("gemini", "Gemini", "", if (m.startsWith("gemini") || m.startsWith("gemma")) m else DEF_GEMINI_MODEL)
+            "claude" -> Det("claude", "Claude", "", if (m.startsWith("claude")) m else DEF_CLAUDE_MODEL)
+            else -> Det("openai", a?.label ?: "OpenAI-সামঞ্জস্যপূর্ণ", g.base.ifBlank { a?.base ?: DEF_OPENAI_BASE }, m.ifBlank { a?.model ?: "" })
+        }
+    }
     private const val MAX_PER_HOUR = 8      // একই প্রেরককে ঘণ্টায় সর্বোচ্চ এত AI উত্তর (দুই অটো-রিপ্লাই বটের অসীম চক্র ও বিল ঠেকাতে)
     private const val MAX_INFO = 12000      // তথ্যের সর্বোচ্চ দৈর্ঘ্য (অক্ষর)
     private const val MAX_ANSWER = 1500
@@ -27,7 +57,10 @@ object Ai {
 
     fun cfg(c: Context) = AiCfg(Store.aiProvider(c), Store.aiKey(c), Store.aiModel(c), Store.aiBase(c), Store.aiInfo(c))
 
-    fun configured(g: AiCfg) = g.key.isNotBlank() && g.info.isNotBlank() && (g.prov == "claude" || g.prov == "gemini" || g.model.isNotBlank())
+    fun configured(g: AiCfg): Boolean {
+        val e = eff(g) ?: return false
+        return g.key.isNotBlank() && g.info.isNotBlank() && (e.id != "openai" || e.model.isNotBlank())
+    }
 
     fun ready(c: Context) = Store.aiOn(c) && configured(cfg(c))
 
@@ -73,22 +106,24 @@ object Ai {
     fun test(g: AiCfg, q: String): Pair<String?, String?> = ask(g, emptyList(), q)
 
     private fun ask(g: AiCfg, h: List<Pair<String, String>>, q: String): Pair<String?, String?> {
-        if (!configured(g)) return Pair(null, "API কী, মডেল বা প্রতিষ্ঠানের তথ্য দেওয়া হয়নি")
+        if (g.key.isBlank()) return Pair(null, "API কী দেওয়া হয়নি")
+        val e = eff(g) ?: return Pair(null, "চাবির ধরন চেনা যায়নি; \"উন্নত\" অংশ থেকে প্রোভাইডার বেছে নিন")
+        if (!configured(g)) return Pair(null, if (g.info.isBlank()) "প্রতিষ্ঠানের তথ্য দেওয়া হয়নি" else "এই প্রোভাইডারের জন্য মডেলের নাম দিন (উন্নত অংশে)")
         return try {
-            val raw = when (g.prov) {
-                "gemini" -> callGemini(g, h, q)
-                "claude" -> callClaude(g, h, q)
-                else -> callOpenAi(g, h, q)
+            val raw = when (e.id) {
+                "gemini" -> callGemini(e, g, h, q)
+                "claude" -> callClaude(e, g, h, q)
+                else -> callOpenAi(e, g, h, q)
             }
             val t = raw.trim().take(MAX_ANSWER)
             if (t.isEmpty()) Pair(null, "AI খালি উত্তর দিয়েছে") else Pair(t, null)
-        } catch (e: Exception) {
-            Pair(null, (e.message ?: e.javaClass.simpleName).take(160))
+        } catch (x: Exception) {
+            Pair(null, (x.message ?: x.javaClass.simpleName).take(160))
         }
     }
 
     // Gemini (Google): রাহ কেয়ারের API Key Test পেজে যে পদ্ধতিতে চ্যাট চলছে সেই একই generateContent ডাক ও x-goog-api-key হেডার
-    private fun callGemini(g: AiCfg, h: List<Pair<String, String>>, q: String): String {
+    private fun callGemini(e: Det, g: AiCfg, h: List<Pair<String, String>>, q: String): String {
         fun turn(role: String, text: String) =
             JSONObject().put("role", role).put("parts", JSONArray().put(JSONObject().put("text", text)))
         val contents = JSONArray()
@@ -101,7 +136,7 @@ object Ai {
             .put("systemInstruction", JSONObject().put("parts", JSONArray().put(JSONObject().put("text", system(g.info)))))
             .put("contents", contents)
             .put("generationConfig", JSONObject().put("maxOutputTokens", 1024))
-        val model = g.model.ifBlank { DEF_GEMINI_MODEL }.removePrefix("models/")
+        val model = e.model
         val res = post(
             "https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent",
             mapOf("x-goog-api-key" to g.key),
@@ -113,7 +148,7 @@ object Ai {
         return sb.toString()
     }
 
-    private fun callClaude(g: AiCfg, h: List<Pair<String, String>>, q: String): String {
+    private fun callClaude(e: Det, g: AiCfg, h: List<Pair<String, String>>, q: String): String {
         val msgs = JSONArray()
         for ((u, a) in h) {
             msgs.put(JSONObject().put("role", "user").put("content", u))
@@ -121,7 +156,7 @@ object Ai {
         }
         msgs.put(JSONObject().put("role", "user").put("content", q))
         val body = JSONObject()
-            .put("model", g.model.ifBlank { DEF_CLAUDE_MODEL })
+            .put("model", e.model)
             .put("max_tokens", 500)
             .put("system", system(g.info))
             .put("messages", msgs)
@@ -139,7 +174,7 @@ object Ai {
         return sb.toString()
     }
 
-    private fun callOpenAi(g: AiCfg, h: List<Pair<String, String>>, q: String): String {
+    private fun callOpenAi(e: Det, g: AiCfg, h: List<Pair<String, String>>, q: String): String {
         val msgs = JSONArray()
         msgs.put(JSONObject().put("role", "system").put("content", system(g.info)))
         for ((u, a) in h) {
@@ -148,10 +183,10 @@ object Ai {
         }
         msgs.put(JSONObject().put("role", "user").put("content", q))
         val body = JSONObject()
-            .put("model", g.model)
+            .put("model", e.model)
             .put("max_tokens", 500)
             .put("messages", msgs)
-        val base = g.base.ifBlank { DEF_OPENAI_BASE }.trimEnd('/')
+        val base = e.base.trimEnd('/')
         val res = post("$base/chat/completions", mapOf("Authorization" to "Bearer " + g.key), body.toString())
         return JSONObject(res).optJSONArray("choices")?.optJSONObject(0)?.optJSONObject("message")?.optString("content") ?: ""
     }

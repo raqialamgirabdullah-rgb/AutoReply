@@ -721,99 +721,199 @@ class MainActivity : Activity() {
         addSide(ver, 14)
     }
 
-    // AI সেটিংস: প্রোভাইডার, API কী, মডেল, প্রতিষ্ঠানের তথ্য, আর একটা পরীক্ষার প্রশ্ন
+    // AI সেটিংস: একটাই API কী-র ঘর (চাবি দেখে প্রোভাইডার নিজে চেনা হয়), প্রতিষ্ঠানের তথ্য, পরীক্ষা; বাকি সব "উন্নত"-এর ভেতরে
     private fun aiDialog() {
         val cur = Ai.cfg(this)
+        val dlg = AlertDialog.Builder(this).create()
+
+        fun field(hint: String, text: String, lines: Int = 1, secret: Boolean = false): EditText {
+            val e = EditText(this)
+            e.hint = hint
+            e.setText(text)
+            e.setTextColor(ink)
+            e.setHintTextColor(Color.parseColor("#5F7378"))
+            e.textSize = 14.5f
+            e.background = rounded(inner, 12, line)
+            e.setPadding(d(14), d(12), d(14), d(12))
+            if (lines > 1) {
+                e.minLines = lines
+                e.gravity = Gravity.TOP
+                e.inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
+            } else {
+                e.inputType = android.text.InputType.TYPE_CLASS_TEXT or
+                    (if (secret) android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD else android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS)
+            }
+            return e
+        }
+        fun label(p: LinearLayout, t: String, sub: String? = null, top: Int = 18) {
+            addTo(p, tv(t, 14f, accent, true), top)
+            if (sub != null) addTo(p, tv(sub, 12f, mute), 3)
+        }
+
         val box = LinearLayout(this)
         box.orientation = LinearLayout.VERTICAL
-        box.setPadding(d(20), d(8), d(20), d(8))
-        bullets(box, listOf("কোনো নিয়ম না মিললে AI নিচের তথ্য থেকে উত্তর দেয়", "শুধু মেসেজের লেখা AI সেবায় যায়, নাম বা নম্বর যায় না", "API কী এই ফোনেই থাকে"), 0)
+        box.background = rounded(panel, 24, line)
+        box.setPadding(d(20), d(20), d(20), d(18))
 
+        // ওপরের অংশ: ছোট আইকন + শিরোনাম
+        val head = LinearLayout(this)
+        head.orientation = LinearLayout.HORIZONTAL
+        head.gravity = Gravity.CENTER_VERTICAL
+        val badge = tv("\u2726", 20f, Color.parseColor("#06201C"), true)
+        badge.gravity = Gravity.CENTER
+        badge.background = rounded(accent, 14)
+        head.addView(badge, LinearLayout.LayoutParams(d(44), d(44)))
+        val ht = LinearLayout(this)
+        ht.orientation = LinearLayout.VERTICAL
+        ht.addView(tv("AI সহকারী", 20f, bold = true))
+        ht.addView(tv("নিয়ম না মিললে AI প্রতিষ্ঠানের তথ্য থেকে উত্তর দেবে", 12f, mute))
+        val hlp = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+        hlp.leftMargin = d(12)
+        head.addView(ht, hlp)
+        addTo(box, head, 0)
+
+        // ১. API কী
+        label(box, "API কী", "যেকোনো AI-র চাবি বসান (Gemini, Claude, OpenAI…): কোনটা, অ্যাপ নিজে চিনে নেবে")
+        val keyRow = LinearLayout(this)
+        keyRow.orientation = LinearLayout.HORIZONTAL
+        keyRow.gravity = Gravity.CENTER_VERTICAL
+        val key = field("এখানে পেস্ট করুন", cur.key, secret = true)
+        keyRow.addView(key, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        var shown = false
+        val eye = ghost("দেখান") {}
+        eye.setOnClickListener {
+            shown = !shown
+            val t = if (shown) android.text.InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD else android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+            key.inputType = android.text.InputType.TYPE_CLASS_TEXT or t
+            key.setSelection(key.text.length)
+            eye.text = if (shown) "লুকান" else "দেখান"
+        }
+        val elp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        elp.leftMargin = d(8)
+        keyRow.addView(eye, elp)
+        addTo(box, keyRow, 8)
+        val chip = tv("", 12.5f, mute, true)
+        addTo(box, chip, 8)
+
+        // ২. প্রতিষ্ঠানের তথ্য
+        label(box, "প্রতিষ্ঠানের তথ্য", "নাম, সেবা, দাম, ঠিকানা, খোলার সময়, যোগাযোগ, সাধারণ প্রশ্ন-উত্তর। শুধু মেসেজের লেখা AI-তে যায়, নাম বা নম্বর যায় না।")
+        val info = field("যা লিখবেন, AI শুধু সেখান থেকেই উত্তর দেবে", cur.info, lines = 6)
+        addTo(box, info, 8)
+
+        // ৩. পরীক্ষা
+        label(box, "পরীক্ষা")
+        val testQ = field("কাস্টমার যা জিজ্ঞেস করতে পারে", "")
+        addTo(box, testQ, 8)
+        val testOut = tv("", 13f, ink)
+        testOut.background = rounded(inner, 12, line)
+        testOut.setPadding(d(14), d(12), d(14), d(12))
+        testOut.visibility = View.GONE
+
+        // উন্নত (ঐচ্ছিক)
+        val adv = LinearLayout(this)
+        adv.orientation = LinearLayout.VERTICAL
+        adv.visibility = View.GONE
+        addTo(adv, tv("সাধারণত এগুলো লাগে না। শুধু চাবির ধরন চেনা না গেলে বা নির্দিষ্ট মডেল চাইলে ব্যবহার করুন।", 12f, mute), 0)
         val rg = RadioGroup(this)
         rg.orientation = LinearLayout.VERTICAL
-        val rbG = RadioButton(this)
-        rbG.id = View.generateViewId()
-        rbG.text = "Gemini (Google)"
-        rbG.setTextColor(ink)
-        val rb1 = RadioButton(this)
-        rb1.id = View.generateViewId()
-        rb1.text = "Claude (Anthropic)"
-        rb1.setTextColor(ink)
-        val rb2 = RadioButton(this)
-        rb2.id = View.generateViewId()
-        rb2.text = "OpenAI-সামঞ্জস্যপূর্ণ (OpenAI, DeepSeek…)"
-        rb2.setTextColor(ink)
-        rg.addView(rbG)
-        rg.addView(rb1)
-        rg.addView(rb2)
-        rg.check(when (cur.prov) { "claude" -> rb1.id; "openai" -> rb2.id; else -> rbG.id })
-        addTo(box, rg, 10)
-
-        val key = EditText(this)
-        key.hint = "API কী"
-        key.inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
-        key.setText(cur.key)
-        addTo(box, key, 6)
-        val model = EditText(this)
-        model.setText(cur.model)
-        addTo(box, model, 2)
-        val base = EditText(this)
-        base.hint = "Base URL (খালি রাখলে ${Ai.DEF_OPENAI_BASE})"
-        base.setText(cur.base)
-        addTo(box, base, 2)
-        fun refresh() {
-            model.hint = when {
-                rbG.isChecked -> "মডেল (খালি রাখলে ${Ai.DEF_GEMINI_MODEL})"
-                rb1.isChecked -> "মডেল (খালি রাখলে ${Ai.DEF_CLAUDE_MODEL})"
-                else -> "মডেলের নাম (যেমন gpt-4o-mini)"
-            }
-            base.visibility = if (rb2.isChecked) View.VISIBLE else View.GONE
+        fun rb(t: String): RadioButton {
+            val r = RadioButton(this)
+            r.id = View.generateViewId()
+            r.text = t
+            r.setTextColor(ink)
+            r.buttonTintList = ColorStateList.valueOf(accent)
+            rg.addView(r)
+            return r
         }
+        val rbA = rb("স্বয়ংক্রিয় (প্রস্তাবিত)")
+        val rbG = rb("Gemini (Google)")
+        val rbC = rb("Claude (Anthropic)")
+        val rbO = rb("OpenAI-সামঞ্জস্যপূর্ণ (DeepSeek, Groq…)")
+        rg.check(when (cur.prov) { "gemini" -> rbG.id; "claude" -> rbC.id; "openai" -> rbO.id; else -> rbA.id })
+        addTo(adv, rg, 10)
+        val model = field("মডেলের নাম (খালি রাখলে নিজে বেছে নেবে)", cur.model)
+        addTo(adv, model, 8)
+        val base = field("Base URL (শুধু OpenAI-সামঞ্জস্যপূর্ণ হলে)", cur.base)
+        addTo(adv, base, 8)
+
+        fun readCfg() = AiCfg(
+            when (rg.checkedRadioButtonId) { rbG.id -> "gemini"; rbC.id -> "claude"; rbO.id -> "openai"; else -> "auto" },
+            key.text.toString().trim(), model.text.toString().trim(), base.text.toString().trim(), info.text.toString().trim()
+        )
+        fun refresh() {
+            val g = readCfg()
+            val e = Ai.eff(g)
+            when {
+                g.key.isBlank() -> { chip.text = "চাবি বসালে এখানে দেখাবে কোন AI চেনা গেছে"; chip.setTextColor(mute) }
+                e != null -> { chip.text = "\u2714  ${e.label} চেনা গেছে" + (if (e.id == "openai" && e.model.isBlank()) " (মডেলের নাম দিন)" else " \u00B7 মডেল: ${e.model}"); chip.setTextColor(accent) }
+                else -> { chip.text = "চাবির ধরন চেনা যায়নি; নিচের \"উন্নত\" থেকে বেছে নিন"; chip.setTextColor(warn) }
+            }
+            base.visibility = if (e?.id == "openai") View.VISIBLE else View.GONE
+        }
+        val tw = object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, a: Int) {}
+            override fun onTextChanged(s: CharSequence?, st: Int, b: Int, c: Int) {}
+            override fun afterTextChanged(s: android.text.Editable?) { refresh() }
+        }
+        key.addTextChangedListener(tw)
+        model.addTextChangedListener(tw)
         rg.setOnCheckedChangeListener { _, _ -> refresh() }
         refresh()
 
-        val info = EditText(this)
-        info.hint = "প্রতিষ্ঠানের তথ্য: নাম, সেবা, দাম, ঠিকানা, খোলার সময়, যোগাযোগ, সাধারণ প্রশ্ন-উত্তর…"
-        info.setText(cur.info)
-        info.minLines = 8
-        info.gravity = Gravity.TOP
-        info.inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
-        addTo(box, info, 10)
-
-        fun readCfg() = AiCfg(
-            if (rbG.isChecked) "gemini" else if (rb1.isChecked) "claude" else "openai",
-            key.text.toString().trim(), model.text.toString().trim(),
-            base.text.toString().trim(), info.text.toString().trim()
-        )
-
-        val testQ = EditText(this)
-        testQ.hint = "পরীক্ষার প্রশ্ন (কাস্টমার যা জিজ্ঞেস করতে পারে)"
-        addTo(box, testQ, 14)
-        val testOut = tv("", 13f, mute)
         addTo(box, ghost("পরীক্ষা করুন") {
             val q = testQ.text.toString().trim()
             if (q.isNotEmpty()) {
                 val g = readCfg()
+                testOut.visibility = View.VISIBLE
+                testOut.setTextColor(mute)
                 testOut.text = "অপেক্ষা করুন…"
                 Thread {
                     val r = Ai.test(g, q)
-                    runOnUiThread { testOut.text = r.first ?: ("ব্যর্থ: " + r.second) }
+                    runOnUiThread {
+                        testOut.setTextColor(if (r.first != null) ink else warn)
+                        testOut.text = r.first ?: ("ব্যর্থ: " + r.second)
+                    }
                 }.start()
             }
-        }, 8)
+        }, 10)
         addTo(box, testOut, 8)
 
+        val advBtn = tv("উন্নত সেটিংস  \u25BE", 13f, mute, true)
+        advBtn.setPadding(0, d(8), 0, d(8))
+        advBtn.setOnClickListener {
+            val open = adv.visibility != View.VISIBLE
+            adv.visibility = if (open) View.VISIBLE else View.GONE
+            advBtn.text = if (open) "উন্নত সেটিংস  \u25B4" else "উন্নত সেটিংস  \u25BE"
+        }
+        addTo(box, advBtn, 14)
+        addTo(box, adv, 0)
+
+        // নিচের দুই বোতাম
+        val btns = LinearLayout(this)
+        btns.orientation = LinearLayout.HORIZONTAL
+        val cancel = ghost("বাতিল", mute) { dlg.dismiss() }
+        val save = primary("সংরক্ষণ") {
+            Store.saveAi(this, readCfg())
+            Toast.makeText(this, "সংরক্ষণ হয়েছে", Toast.LENGTH_SHORT).show()
+            dlg.dismiss()
+        }
+        val l1 = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+        val l2 = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 2f)
+        l2.leftMargin = d(10)
+        btns.addView(cancel, l1)
+        btns.addView(save, l2)
+        addTo(box, btns, 18)
+
         val sv = ScrollView(this)
+        sv.isVerticalScrollBarEnabled = false
+        sv.setPadding(d(12), d(24), d(12), d(24))
+        sv.clipToPadding = false
         sv.addView(box)
-        AlertDialog.Builder(this)
-            .setTitle("AI সেটিংস")
-            .setView(sv)
-            .setPositiveButton("সংরক্ষণ") { _, _ ->
-                Store.saveAi(this, readCfg())
-                Toast.makeText(this, "সংরক্ষণ হয়েছে", Toast.LENGTH_SHORT).show()
-            }
-            .setNegativeButton("বাতিল", null)
-            .show()
+        dlg.setView(sv)
+        dlg.show()
+        dlg.window?.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(Color.TRANSPARENT))
+        dlg.window?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+        dlg.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
     }
 
     private fun edit(r: Rule?, rules: MutableList<Rule>) {

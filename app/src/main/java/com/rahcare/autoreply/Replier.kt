@@ -34,7 +34,7 @@ object Replier {
     @Synchronized
     fun handle(c: Context, pkg: String, uid: Int, key: String, postTime: Long, n: Notification, catchUp: Boolean, markOnly: Boolean) {
         if (catchUp && System.currentTimeMillis() - postTime > 30 * 60 * 1000L) return
-        if (pkg == c.packageName) return
+        if (pkg == c.packageName || Store.ignored(pkg)) return
         val canReply = n.actions?.any { a -> a.remoteInputs?.any { it.allowFreeFormInput } == true } == true
         val fam = Store.family(pkg)
         if (fam == null && !canReply) return // চেনা পরিবারের নয় এবং Reply-ও নেই: বাদ
