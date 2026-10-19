@@ -33,17 +33,40 @@ jobs:
           git config user.name "gemini-agent"
           git config user.email "gemini-agent@users.noreply.github.com"
 
-      - name: Check Gemini key
+      - name: Check Gemini key and pick a working model
         id: keycheck
         continue-on-error: true
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          code=$(curl -s -o /tmp/r.json -w '%{http_code}' -H "x-goog-api-key: $GEMINI_API_KEY" -H 'Content-Type: application/json' -d '{"contents":[{"parts":[{"text":"hi"}]}]}' "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent" || echo 000)
-          msg=$(python3 -c "import json;d=json.load(open('/tmp/r.json'));print(((d.get('error') or {}).get('message') or 'ok')[:300].replace('\n',' '))" 2>/dev/null || echo "unparsed")
-          echo "code=$code" >> "$GITHUB_OUTPUT"
-          echo "msg=$msg" >> "$GITHUB_OUTPUT"
-          echo "Gemini key check: HTTP $code - $msg"
+          # একটি মডেলের দৈনিক কোটা শেষ বা চাপ বেশি হলে (429/503) পরেরটা চেষ্টা হয়
+          chosen=""; report=""
+          for m in gemini-flash-latest gemini-flash-lite-latest gemini-2.5-flash-lite gemini-2.5-flash; do
+            code=$(curl -s -m 40 -o /tmp/r.json -w '%{http_code}' -H "x-goog-api-key: $GEMINI_API_KEY" -H 'Content-Type: application/json' -d '{"contents":[{"parts":[{"text":"hi"}]}]}' "https://generativelanguage.googleapis.com/v1beta/models/$m:generateContent" || echo 000)
+            report="$report$m=$code; "
+            if [ "$code" = "200" ] && [ -z "$chosen" ]; then chosen="$m"; fi
+          done
+          echo "model=$chosen" >> "$GITHUB_OUTPUT"
+          echo "models=$report" >> "$GITHUB_OUTPUT"
+          echo "Gemini key check: $report -> chosen: ${chosen:-none}"
+
+      - name: Allow git/gh/read-only shell for Gemini in headless mode
+        run: |
+          mkdir -p "$HOME/.gemini/policies"
+          cat > "$HOME/.gemini/policies/ci.toml" <<'TOML'
+          [[rule]]
+          toolName = "run_shell_command"
+          commandPrefix = ["git push origin main", "git push origin HEAD:main", "git push --force", "git push -f", "gh workflow", "gh secret"]
+          decision = "deny"
+          priority = 300
+
+          [[rule]]
+          toolName = "run_shell_command"
+          commandPrefix = ["git", "gh", "ls", "cat", "grep", "sed"]
+          decision = "allow"
+          priority = 200
+          allowRedirection = true
+          TOML
 
       - name: Run Gemini
         id: gemini
@@ -57,7 +80,7 @@ jobs:
           REPO: ${{ github.repository }}
         with:
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
-          gemini_model: gemini-flash-latest   # ডিফল্ট মডেল প্রায়ই 503 (চাপ বেশি) দেয়; এই মডেলে কী কাজ করে
+          gemini_model: ${{ steps.keycheck.outputs.model || 'gemini-flash-latest' }}
           settings: |-
             {
               "tools": {
@@ -91,14 +114,14 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           OUTCOME: ${{ steps.gemini.outcome }}
-          KEY_CODE: ${{ steps.keycheck.outputs.code }}
-          KEY_MSG: ${{ steps.keycheck.outputs.msg }}
+          KEY_MODELS: ${{ steps.keycheck.outputs.models }}
+          KEY_MODEL: ${{ steps.keycheck.outputs.model }}
           G_ERROR: ${{ steps.gemini.outputs.error }}
           G_SUMMARY: ${{ steps.gemini.outputs.summary }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           {
-            echo "Gemini রান: **$OUTCOME** (API কী পরীক্ষা: HTTP ${KEY_CODE:-?} - ${KEY_MSG:-?})"
+            echo "Gemini রান: **$OUTCOME** — ব্যবহৃত মডেল: ${KEY_MODEL:-কোনোটিই কাজ করেনি}; মডেল পরীক্ষা: ${KEY_MODELS:-?}"
             if [ -n "$G_ERROR" ]; then echo; echo "ত্রুটি:"; echo '```'; printf '%s' "$G_ERROR" | head -c 1500; echo; echo '```'; fi
             if [ "$OUTCOME" != "success" ] && [ -n "$G_SUMMARY" ]; then echo; echo "আউটপুট:"; echo '```'; printf '%s' "$G_SUMMARY" | head -c 1200; echo; echo '```'; fi
             echo; echo "[রানের লিংক]($RUN_URL)"
