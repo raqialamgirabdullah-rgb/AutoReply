@@ -114,6 +114,18 @@ object Store {
     fun log(c: Context) = p(c).getString("log", "") ?: ""
     fun setLog(c: Context, v: String) = p(c).edit().putString("log", v).apply()
 
+    // ---------- AI স্বয়ংক্রিয় চ্যাট: নিয়ম না মিললে প্রতিষ্ঠানের তথ্য থেকে AI উত্তর দেয় ----------
+    fun aiOn(c: Context) = p(c).getBoolean("ai_on", false)
+    fun setAiOn(c: Context, v: Boolean) = p(c).edit().putBoolean("ai_on", v).apply()
+    fun aiProvider(c: Context) = p(c).getString("ai_prov", "claude") ?: "claude"
+    fun aiKey(c: Context) = p(c).getString("ai_key", "") ?: ""
+    fun aiModel(c: Context) = p(c).getString("ai_model", "") ?: ""
+    fun aiBase(c: Context) = p(c).getString("ai_base", "") ?: ""
+    fun aiInfo(c: Context) = p(c).getString("ai_info", "") ?: ""
+    fun saveAi(c: Context, g: AiCfg) = p(c).edit()
+        .putString("ai_prov", g.prov).putString("ai_key", g.key).putString("ai_model", g.model)
+        .putString("ai_base", g.base).putString("ai_info", g.info).apply()
+
     fun rules(c: Context): MutableList<Rule> {
         val s = p(c).getString("rules", null)
             ?: return mutableListOf(Rule("সালাম, salam", "ওয়ালাইকুম আসসালাম"))

@@ -27,6 +27,8 @@ import android.view.ViewGroup
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.LinearLayout
+import android.widget.RadioButton
+import android.widget.RadioGroup
 import android.widget.ScrollView
 import android.widget.Switch
 import android.widget.TextView
@@ -582,6 +584,15 @@ class MainActivity : Activity() {
         }, 12)
         addSide(perm, 16)
 
+        // AI স্বয়ংক্রিয় চ্যাট: নিয়ম না মিললে প্রতিষ্ঠানের তথ্য থেকে AI উত্তর দেয়
+        val aiCard = card()
+        addTo(aiCard, swRow("AI স্বয়ংক্রিয় চ্যাট", null, Store.aiOn(c)) { v ->
+            Store.setAiOn(c, v)
+            if (v && !Ai.configured(Ai.cfg(c))) Toast.makeText(c, "আগে \"AI সেটিংস\"-এ API কী ও প্রতিষ্ঠানের তথ্য দিন", Toast.LENGTH_LONG).show()
+        }, 0)
+        addTo(aiCard, ghost("AI সেটিংস") { aiDialog() }, 10)
+        addSide(aiCard, 14)
+
         // শেষ ঘটনা
         val act = card()
         title(act, "সর্বশেষ কার্যকলাপ")
@@ -619,6 +630,93 @@ class MainActivity : Activity() {
             addTo(ver, ghost("ব্রাউজার দিয়ে ডাউনলোড করুন") { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(up.url))) }, 8)
         }
         addSide(ver, 14)
+    }
+
+    // AI সেটিংস: প্রোভাইডার, API কী, মডেল, প্রতিষ্ঠানের তথ্য, আর একটা পরীক্ষার প্রশ্ন
+    private fun aiDialog() {
+        val cur = Ai.cfg(this)
+        val box = LinearLayout(this)
+        box.orientation = LinearLayout.VERTICAL
+        box.setPadding(d(20), d(8), d(20), d(8))
+        box.addView(tv("কোনো নিয়ম না মিললে AI নিচের তথ্য থেকে উত্তর দেয়। কাস্টমারের মেসেজের লেখা আপনার বেছে নেওয়া AI সেবায় যায় (নাম বা নম্বর যায় না)। API কী এই ফোনেই থাকে।", 12f, mute))
+
+        val rg = RadioGroup(this)
+        rg.orientation = LinearLayout.VERTICAL
+        val rb1 = RadioButton(this)
+        rb1.id = View.generateViewId()
+        rb1.text = "Claude (Anthropic)"
+        rb1.setTextColor(ink)
+        val rb2 = RadioButton(this)
+        rb2.id = View.generateViewId()
+        rb2.text = "OpenAI-সামঞ্জস্যপূর্ণ (OpenAI, Gemini, DeepSeek…)"
+        rb2.setTextColor(ink)
+        rg.addView(rb1)
+        rg.addView(rb2)
+        rg.check(if (cur.prov == "claude") rb1.id else rb2.id)
+        addTo(box, rg, 10)
+
+        val key = EditText(this)
+        key.hint = "API কী"
+        key.inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+        key.setText(cur.key)
+        addTo(box, key, 6)
+        val model = EditText(this)
+        model.setText(cur.model)
+        addTo(box, model, 2)
+        val base = EditText(this)
+        base.hint = "Base URL (খালি রাখলে ${Ai.DEF_OPENAI_BASE})"
+        base.setText(cur.base)
+        addTo(box, base, 2)
+        fun refresh() {
+            val cl = rb1.isChecked
+            model.hint = if (cl) "মডেল (খালি রাখলে ${Ai.DEF_CLAUDE_MODEL})" else "মডেলের নাম (যেমন gpt-4o-mini)"
+            base.visibility = if (cl) View.GONE else View.VISIBLE
+        }
+        rg.setOnCheckedChangeListener { _, _ -> refresh() }
+        refresh()
+
+        val info = EditText(this)
+        info.hint = "প্রতিষ্ঠানের তথ্য: নাম, সেবা, দাম, ঠিকানা, খোলার সময়, যোগাযোগ, সাধারণ প্রশ্ন-উত্তর…"
+        info.setText(cur.info)
+        info.minLines = 8
+        info.gravity = Gravity.TOP
+        info.inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
+        addTo(box, info, 10)
+
+        fun readCfg() = AiCfg(
+            if (rb1.isChecked) "claude" else "openai",
+            key.text.toString().trim(), model.text.toString().trim(),
+            base.text.toString().trim(), info.text.toString().trim()
+        )
+
+        val testQ = EditText(this)
+        testQ.hint = "পরীক্ষার প্রশ্ন (কাস্টমার যা জিজ্ঞেস করতে পারে)"
+        addTo(box, testQ, 14)
+        val testOut = tv("", 13f, mute)
+        addTo(box, ghost("পরীক্ষা করুন") {
+            val q = testQ.text.toString().trim()
+            if (q.isNotEmpty()) {
+                val g = readCfg()
+                testOut.text = "অপেক্ষা করুন…"
+                Thread {
+                    val r = Ai.test(g, q)
+                    runOnUiThread { testOut.text = r.first ?: ("ব্যর্থ: " + r.second) }
+                }.start()
+            }
+        }, 8)
+        addTo(box, testOut, 8)
+
+        val sv = ScrollView(this)
+        sv.addView(box)
+        AlertDialog.Builder(this)
+            .setTitle("AI সেটিংস")
+            .setView(sv)
+            .setPositiveButton("সংরক্ষণ") { _, _ ->
+                Store.saveAi(this, readCfg())
+                Toast.makeText(this, "সংরক্ষণ হয়েছে", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("বাতিল", null)
+            .show()
     }
 
     private fun edit(r: Rule?, rules: MutableList<Rule>) {

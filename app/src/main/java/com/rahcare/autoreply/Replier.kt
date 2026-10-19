@@ -5,6 +5,7 @@ import android.app.RemoteInput
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.os.PowerManager
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -91,14 +92,16 @@ object Replier {
         if (markOnly) return
         if (text in sent) return // এটা আমাদেরই পাঠানো উত্তর
 
+        // আগে নিয়ম; কোনো নিয়ম না মিললে (এবং AI চালু ও সাজানো থাকলে) AI
         val reply = Store.match(c, text)
-        if (reply == null) { log(c, pkg, uid, sender, text, "কোনো নিয়ম মেলেনি"); return }
+        if (reply == null && !Ai.ready(c)) { log(c, pkg, uid, sender, text, "কোনো নিয়ম মেলেনি"); return }
 
         val acts = n.actions
         if (acts == null) { log(c, pkg, uid, sender, text, "নোটিফিকেশনে কোনো বাটন নেই"); return }
         for (a in acts) {
             val ris = a.remoteInputs ?: continue
             val ri = ris.firstOrNull { it.allowFreeFormInput } ?: continue
+            if (reply == null) { replyWithAi(c, pkg, uid, sender, text, a, ris, ri); return }
             if (sent.size > 50) sent.clear()
             sent.add(reply)
             val err = send(c, a, ris, ri, reply)
@@ -107,6 +110,39 @@ object Replier {
             return
         }
         log(c, pkg, uid, sender, text, "Reply বাটন পাওয়া যায়নি")
+    }
+
+    // AI-এর উত্তর আসতে সময় লাগে, তাই আলাদা থ্রেডে API কল করে তারপর একই Reply বাটনে পাঠায়
+    private fun replyWithAi(c: Context, pkg: String, uid: Int, sender: String, text: String, a: Notification.Action, ris: Array<RemoteInput>, ri: RemoteInput) {
+        log(c, pkg, uid, sender, text, "AI উত্তর তৈরি হচ্ছে…")
+        val conv = "$pkg@$uid|$sender"
+        Thread {
+            var wl: PowerManager.WakeLock? = null
+            try {
+                wl = c.getSystemService(PowerManager::class.java).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "autoreply:ai")
+                wl.acquire(70000L)
+            } catch (e: Exception) {}
+            try {
+                val res = Ai.answer(c, conv, text)
+                val ans = res.first
+                if (ans == null) {
+                    Store.ev(c, "AI ব্যর্থ: ${res.second}")
+                    log(c, pkg, uid, sender, text, "AI ব্যর্থ: ${res.second}")
+                    return@Thread
+                }
+                synchronized(this@Replier) {
+                    if (sent.size > 50) sent.clear()
+                    sent.add(ans)
+                }
+                val err = send(c, a, ris, ri, ans)
+                Store.ev(c, "AI উত্তরের ফল: " + (err ?: "সফল"))
+                log(c, pkg, uid, sender, text, if (err == null) "AI উত্তর পাঠানো হয়েছে: ${ans.take(80)}" else "পাঠাতে ব্যর্থ ($err)")
+            } catch (e: Exception) {
+                log(c, pkg, uid, sender, text, "AI ব্যর্থ: ${e.javaClass.simpleName}")
+            } finally {
+                try { if (wl != null && wl.isHeld) wl.release() } catch (e: Exception) {}
+            }
+        }.start()
     }
 
     private fun send(c: Context, a: Notification.Action, ris: Array<RemoteInput>, ri: RemoteInput, text: String): String? {
