@@ -122,10 +122,22 @@ jobs:
         run: |
           {
             echo "Gemini রান: **$OUTCOME** — ব্যবহৃত মডেল: ${KEY_MODEL:-কোনোটিই কাজ করেনি}; মডেল পরীক্ষা: ${KEY_MODELS:-?}"
-            if [ -n "$G_ERROR" ]; then echo; echo "ত্রুটি:"; echo '```'; printf '%s' "$G_ERROR" | head -c 1500; echo; echo '```'; fi
+            if [ -n "$G_ERROR" ]; then echo; echo "ত্রুটি:"; echo '```'; printf '%s' "$G_ERROR" | grep -v 'at ' | tail -c 1500; echo; echo '```'; fi
             if [ "$OUTCOME" != "success" ] && [ -n "$G_SUMMARY" ]; then echo; echo "আউটপুট:"; echo '```'; printf '%s' "$G_SUMMARY" | head -c 1200; echo; echo '```'; fi
             echo; echo "[রানের লিংক]($RUN_URL)"
           } > /tmp/report.md
+          python3 - >> /tmp/report.md <<'PY'
+          import glob, json
+          for f in sorted(glob.glob('/tmp/gemini-client-error-*.json'))[:1]:
+              try:
+                  d = json.load(open(f))
+                  e = d.get('error', d)
+                  keep = {k: e.get(k) for k in ('message', 'type', 'status', 'code') if isinstance(e, dict) and k in e}
+                  text = json.dumps(keep or e, ensure_ascii=False)
+              except Exception as ex:
+                  text = 'unreadable: ' + str(ex)
+              print('\nসম্পূর্ণ ত্রুটি-রিপোর্ট (ছোট করা):\n```\n' + text[:1800] + '\n```')
+          PY
           gh issue comment "$ISSUE_NUMBER" --body-file /tmp/report.md
 
       - name: Fail the job if Gemini failed
