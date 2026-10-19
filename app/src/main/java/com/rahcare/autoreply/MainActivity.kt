@@ -688,15 +688,14 @@ class MainActivity : Activity() {
         // অ্যাপ/কপির তালিকা (দুই কলামের গ্রিড)
         val apps = card()
         title(apps, "কোন অ্যাপে চলবে")
-        bullets(apps, listOf("WhatsApp, WhatsApp Business ও তাদের ক্লোন/ডুয়াল কপি একটাই সুইচে চলে", "অচেনা কোনো ক্লোন অ্যাপের নোটিফিকেশন এলে এখানে আলাদা সুইচে নিজে যোগ হয়"), 6)
+        bullets(apps, listOf("প্রতিটি অ্যাপ আলাদা করে চালু বা বন্ধ করা যায়"), 6)
         val cells = ArrayList<View>()
         val fmt = SimpleDateFormat("dd MMM HH:mm", Locale.US)
         val shownG = HashSet<String>()
         for (pkg in Store.APPS.keys) {
             val g = Store.grp(pkg) ?: continue
             if (!shownG.add(g)) continue
-            val det = if (g == "WhatsApp") listOf("Business ও ক্লোনসহ") else emptyList()
-            cells.add(swCell(g, det, Store.grpOn(c, g)) { v -> Store.setGrpOn(c, g, v) })
+            cells.add(swCell(g, emptyList(), Store.grpOn(c, g)) { v -> Store.setGrpOn(c, g, v) })
         }
         val shown = HashSet<String>()
         for (i in Store.insts(c)) {
