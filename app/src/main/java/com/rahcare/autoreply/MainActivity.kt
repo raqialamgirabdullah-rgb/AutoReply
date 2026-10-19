@@ -19,6 +19,7 @@ import android.os.Looper
 import android.os.PowerManager
 import android.provider.Settings
 import android.text.SpannableStringBuilder
+import android.text.TextUtils
 import android.text.Spanned
 import android.text.style.ForegroundColorSpan
 import android.view.Gravity
@@ -72,6 +73,9 @@ class MainActivity : Activity() {
     }
 
     private fun d(v: Int) = (v * resources.displayMetrics.density).toInt()
+
+    // সাইডবারের চওড়া: পর্দার ৮৮%, তবে সর্বোচ্চ ৪০০dp
+    private fun sideW() = minOf((resources.displayMetrics.widthPixels * 0.88f).toInt(), d(400))
 
     override fun onCreate(s: Bundle?) {
         super.onCreate(s)
@@ -140,7 +144,7 @@ class MainActivity : Activity() {
         val frame = FrameLayout(this)
         frame.addView(col, FrameLayout.LayoutParams(mp, mp))
         frame.addView(scrim, FrameLayout.LayoutParams(mp, mp))
-        frame.addView(sideSv, FrameLayout.LayoutParams(d(310), mp, Gravity.END))
+        frame.addView(sideSv, FrameLayout.LayoutParams(sideW(), mp, Gravity.END))
         setContentView(frame)
     }
 
@@ -151,7 +155,7 @@ class MainActivity : Activity() {
         scrim.visibility = View.VISIBLE
         scrim.animate().alpha(1f).setDuration(180).start()
         sideSv.visibility = View.VISIBLE
-        sideSv.translationX = d(310).toFloat()
+        sideSv.translationX = sideW().toFloat()
         sideSv.animate().translationX(0f).setDuration(200).start()
     }
 
@@ -159,7 +163,7 @@ class MainActivity : Activity() {
         if (!menuOpen) return
         menuOpen = false
         scrim.animate().alpha(0f).setDuration(160).withEndAction { if (!menuOpen) scrim.visibility = View.GONE }.start()
-        sideSv.animate().translationX(d(310).toFloat()).setDuration(180).withEndAction { if (!menuOpen) sideSv.visibility = View.GONE }.start()
+        sideSv.animate().translationX(sideW().toFloat()).setDuration(180).withEndAction { if (!menuOpen) sideSv.visibility = View.GONE }.start()
     }
 
     @Suppress("DEPRECATION")
@@ -351,6 +355,7 @@ class MainActivity : Activity() {
         v.text = t
         v.textSize = sp
         v.setTextColor(c)
+        v.setLineSpacing(0f, 1.15f)
         if (bold) v.setTypeface(v.typeface, Typeface.BOLD)
         return v
     }
@@ -409,19 +414,45 @@ class MainActivity : Activity() {
         return r
     }
 
-    // সাইডবারের ছোট চালু/বন্ধ ঘর (দুই কলামের গ্রিডের জন্য)
-    private fun swCell(t: String, sub: String?, on: Boolean, f: (Boolean) -> Unit): LinearLayout {
+    // লম্বা লেখা এক অনুচ্ছেদে না রেখে লাইন ধরে সাজায়: প্রতিটি লাইনের সামনে ছোট বিন্দু, দ্বিতীয় লাইন লেখার নিচেই বসে
+    private fun bullets(p: LinearLayout, items: List<String>, top: Int = 6, c: Int = mute) {
+        var first = true
+        for (t in items) {
+            val row = LinearLayout(this)
+            row.orientation = LinearLayout.HORIZONTAL
+            val dot = tv("•", 12.5f, accent, true)
+            dot.setPadding(0, 0, d(8), 0)
+            row.addView(dot, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            row.addView(tv(t, 12.5f, c), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            addTo(p, row, if (first) top else 4)
+            first = false
+        }
+    }
+
+    // সাইডবারের অ্যাপের ঘর (দুই কলামের গ্রিডের জন্য): ওপরে নাম, নিচে খুঁটিনাটি, সবার নিচে অবস্থা ও সুইচ
+    private fun swCell(t: String, details: List<String>, on: Boolean, f: (Boolean) -> Unit): LinearLayout {
         val r = LinearLayout(this)
-        r.orientation = LinearLayout.HORIZONTAL
-        r.gravity = Gravity.CENTER_VERTICAL
-        r.background = rounded(inner, 10, line)
-        r.setPadding(d(10), d(8), d(6), d(8))
-        val col = LinearLayout(this)
-        col.orientation = LinearLayout.VERTICAL
-        col.addView(tv(t, 13f, bold = true))
-        if (sub != null) col.addView(tv(sub, 10f, mute))
-        r.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        r.addView(sw(on, f))
+        r.orientation = LinearLayout.VERTICAL
+        r.background = rounded(inner, 12, line)
+        r.setPadding(d(12), d(11), d(10), d(10))
+        r.addView(tv(t, 14f, bold = true))
+        for (x in details) {
+            val dv = tv(x, 10.5f, mute)
+            dv.maxLines = 1
+            dv.ellipsize = TextUtils.TruncateAt.MIDDLE
+            addTo(r, dv, 2)
+        }
+        val bottom = LinearLayout(this)
+        bottom.orientation = LinearLayout.HORIZONTAL
+        bottom.gravity = Gravity.CENTER_VERTICAL
+        val st = tv(if (on) "চালু" else "বন্ধ", 12f, if (on) accent else mute, true)
+        bottom.addView(st, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        bottom.addView(sw(on) { v ->
+            st.text = if (v) "চালু" else "বন্ধ"
+            st.setTextColor(if (v) accent else mute)
+            f(v)
+        })
+        addTo(r, bottom, 8)
         return r
     }
 
@@ -561,7 +592,7 @@ class MainActivity : Activity() {
         main.addView(row)
         fillStatus()
         if (!ok) {
-            addTo(main, tv("অপশনটা ধূসর থাকলে: ফোনের Settings → Apps → এই অ্যাপ → ওপরে ডানে ⋮ → \"Allow restricted settings\" দিন, তারপর আবার চেষ্টা করুন।", 12f, mute), 10)
+            bullets(main, listOf("অপশনটা ধূসর থাকলে ফোনের Settings → Apps → এই অ্যাপ খুলুন", "ওপরে ডানে ⋮ চেপে \"Allow restricted settings\" দিন", "তারপর আবার চেষ্টা করুন"), 10)
             addTo(main, primary("নোটিফিকেশন অ্যাক্সেস দিন") { startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }, 10)
         }
         addSide(main, 16)
@@ -570,7 +601,8 @@ class MainActivity : Activity() {
         // উত্তরের নিয়ম
         val rules = Store.rules(c)
         val rc = card()
-        title(rc, "উত্তরের নিয়ম", "মেসেজে শব্দগুলোর একটা থাকলেই উত্তর যায়। ওপরের নিয়ম আগে মেলে। গ্রুপ চ্যাটে উত্তর যায় না।")
+        title(rc, "উত্তরের নিয়ম")
+        bullets(rc, listOf("মেসেজে শব্দগুলোর একটা থাকলেই উত্তর যায়", "ওপরের নিয়ম আগে মেলে", "গ্রুপ চ্যাটে উত্তর যায় না"), 6)
         for (r in rules) {
             val rb = LinearLayout(this)
             rb.orientation = LinearLayout.VERTICAL
@@ -655,12 +687,17 @@ class MainActivity : Activity() {
 
         // অ্যাপ/কপির তালিকা (দুই কলামের গ্রিড)
         val apps = card()
-        title(apps, "কোন অ্যাপে চলবে", "একই অ্যাপের ক্লোন/ডুয়াল কপি থেকে একটা নোটিফিকেশন এলে এখানে নিজে যোগ হয়।")
+        title(apps, "কোন অ্যাপে চলবে")
+        bullets(apps, listOf("প্রতিটি অ্যাপ আলাদা করে চালু বা বন্ধ করা যায়", "ক্লোন বা ডুয়াল কপির নোটিফিকেশন এলে এখানে নিজে যোগ হয়"), 6)
         val shown = HashSet<String>()
         val cells = ArrayList<View>()
         val fmt = SimpleDateFormat("dd MMM HH:mm", Locale.US)
-        fun arow(pkg: String, uid: Int, sub: String?) {
-            cells.add(swCell(Store.label(pkg, uid), sub, Store.instOn(c, pkg, uid)) { v -> Store.setInstOn(c, pkg, uid, v) })
+        fun arow(pkg: String, uid: Int, time: String?) {
+            val det = ArrayList<String>()
+            if (!Store.APPS.containsKey(pkg)) det.add(pkg)
+            if (uid != 0) det.add("ইউজার $uid")
+            if (time != null) det.add(time)
+            cells.add(swCell(Store.family(pkg) ?: "অচেনা অ্যাপ", det, Store.instOn(c, pkg, uid)) { v -> Store.setInstOn(c, pkg, uid, v) })
             shown.add("$pkg@$uid")
         }
         for ((pkg, _) in Store.APPS) arow(pkg, 0, null)
@@ -673,7 +710,9 @@ class MainActivity : Activity() {
 
         // সংস্করণ ও আপডেট
         val ver = card()
-        title(ver, "সংস্করণ ${Updater.curVer(c)}", if (up == null) "✔ আপনি সর্বশেষ সংস্করণে আছেন। নতুন সংস্করণ এলে অ্যাপ নিজেই জানাবে।" else "নতুন সংস্করণ আছে (${up.v})")
+        title(ver, "সংস্করণ ${Updater.curVer(c)}")
+        if (up == null) bullets(ver, listOf("আপনি সর্বশেষ সংস্করণে আছেন", "নতুন সংস্করণ এলে অ্যাপ নিজেই জানাবে"), 6)
+        else bullets(ver, listOf("নতুন সংস্করণ আছে (${up.v})"), 6)
         if (up != null) {
             addTo(ver, primary("আপডেট করুন") { install(up.url) }, 10)
             addTo(ver, ghost("ব্রাউজার দিয়ে ডাউনলোড করুন") { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(up.url))) }, 8)
@@ -687,7 +726,7 @@ class MainActivity : Activity() {
         val box = LinearLayout(this)
         box.orientation = LinearLayout.VERTICAL
         box.setPadding(d(20), d(8), d(20), d(8))
-        box.addView(tv("কোনো নিয়ম না মিললে AI নিচের তথ্য থেকে উত্তর দেয়। কাস্টমারের মেসেজের লেখা আপনার বেছে নেওয়া AI সেবায় যায় (নাম বা নম্বর যায় না)। API কী এই ফোনেই থাকে।", 12f, mute))
+        bullets(box, listOf("কোনো নিয়ম না মিললে AI নিচের তথ্য থেকে উত্তর দেয়", "শুধু মেসেজের লেখা AI সেবায় যায়, নাম বা নম্বর যায় না", "API কী এই ফোনেই থাকে"), 0)
 
         val rg = RadioGroup(this)
         rg.orientation = LinearLayout.VERTICAL
