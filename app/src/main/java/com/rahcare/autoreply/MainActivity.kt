@@ -561,7 +561,7 @@ class MainActivity : Activity() {
         val ok = granted()
         val on = Store.enabled(c)
         val up = update
-        dot.visibility = if (up != null) View.VISIBLE else View.GONE
+        dot.visibility = View.GONE // আপডেটের কার্ড মূল পাতায় থাকে, তাই মেনুতে আলাদা লাল বিন্দু লাগে না
         val free = getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(packageName)
 
         // ========== সাইডবার: মাথা ও চালু/বন্ধ কার্ড ==========
@@ -716,15 +716,10 @@ class MainActivity : Activity() {
         grid(apps, cells, 12)
         addSide(apps, 14)
 
-        // সংস্করণ ও আপডেট
+        // সংস্করণ (আপডেটের বোতাম শুধু মূল পাতায়; সাইডবারে কেবল সংস্করণ দেখায়)
         val ver = card()
         title(ver, "সংস্করণ ${Updater.curVer(c)}")
         if (up == null) bullets(ver, listOf("আপনি সর্বশেষ সংস্করণে আছেন", "নতুন সংস্করণ এলে অ্যাপ নিজেই জানাবে"), 6)
-        else bullets(ver, listOf("নতুন সংস্করণ আছে (${up.v})"), 6)
-        if (up != null) {
-            addTo(ver, primary("আপডেট করুন") { install(up.url) }, 10)
-            addTo(ver, ghost("ব্রাউজার দিয়ে ডাউনলোড করুন") { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(up.url))) }, 8)
-        }
         addSide(ver, 14)
     }
 
