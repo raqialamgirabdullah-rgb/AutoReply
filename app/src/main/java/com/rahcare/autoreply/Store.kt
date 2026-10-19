@@ -40,7 +40,7 @@ object Store {
 
     // একটা কপি = প্যাকেজ + ইউজার আইডি (ডুয়াল অ্যাপ/ওয়ার্ক প্রোফাইলে একই প্যাকেজ আলাদা ইউজারে চলে)
     fun label(pkg: String, uid: Int): String {
-        val base = family(pkg) ?: "অচেনা অ্যাপ"
+        val base = family(pkg) ?: "Unknown app"
         val parts = ArrayList<String>()
         if (!APPS.containsKey(pkg)) parts.add(pkg)
         if (uid != 0) parts.add("ইউজার $uid")

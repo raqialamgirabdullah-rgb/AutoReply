@@ -8,7 +8,11 @@ import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageInstaller
 import android.content.res.ColorStateList
+import android.animation.ArgbEvaluator
+import android.animation.ValueAnimator
+import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Paint
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
@@ -319,7 +323,7 @@ class MainActivity : Activity() {
     private fun statusLine(): Pair<String, Int> {
         return when {
             !granted() -> Pair("✘ নোটিফিকেশন অ্যাক্সেস দেওয়া নেই", warn)
-            !Store.enabled(this) -> Pair("✔ অ্যাক্সেস আছে · এখন বন্ধ", mute)
+            !Store.enabled(this) -> Pair("✔ অ্যাক্সেস আছে · এখন Off", mute)
             ReplyService.connected -> Pair("✔ সংযুক্ত — ব্যাকগ্রাউন্ডে মেসেজের অপেক্ষায়", accent)
             else -> Pair("⚠ সংযোগ নেই — আবার জোড়ার চেষ্টা চলছে", warn)
         }
@@ -398,15 +402,45 @@ class MainActivity : Activity() {
         return b
     }
 
-    private fun sw(on: Boolean, f: (Boolean) -> Unit): Switch {
-        val s = Switch(this)
-        val st = arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf())
-        s.thumbTintList = ColorStateList(st, intArrayOf(accent, Color.parseColor("#8A9A9E")))
-        s.trackTintList = ColorStateList(st, intArrayOf(Color.parseColor("#2C6B64"), Color.parseColor("#2A3437")))
-        s.isChecked = on
-        s.setOnCheckedChangeListener { _, v -> f(v) }
-        return s
+    // নিজের আঁকা পিল-আকৃতির অন/অফ সুইচ: মসৃণ স্লাইড, রং ধীরে বদলায়; সব জায়গায় এটাই ব্যবহার হয়
+    private inner class PillSwitch(ctx: android.content.Context, on: Boolean, private val f: (Boolean) -> Unit) : View(ctx) {
+        private var checked = on
+        private var pos = if (on) 1f else 0f
+        private val p = Paint(Paint.ANTI_ALIAS_FLAG)
+        private val ev = ArgbEvaluator()
+        private val trackOff = Color.parseColor("#27353B")
+        private val thumbOff = Color.parseColor("#A9B8BC")
+
+        init {
+            isClickable = true
+            setOnClickListener {
+                checked = !checked
+                ValueAnimator.ofFloat(pos, if (checked) 1f else 0f).apply {
+                    duration = 180
+                    addUpdateListener { pos = it.animatedValue as Float; invalidate() }
+                    start()
+                }
+                f(checked)
+            }
+        }
+
+        override fun onMeasure(w: Int, h: Int) = setMeasuredDimension(d(52), d(32))
+
+        override fun onDraw(c: Canvas) {
+            val w = width.toFloat()
+            val h = height.toFloat()
+            val r = h / 2
+            p.color = ev.evaluate(pos, trackOff, accent) as Int
+            c.drawRoundRect(0f, 0f, w, h, r, r, p)
+            val m = d(3).toFloat()
+            val tr = r - m
+            val cx = r + (w - 2 * r) * pos
+            p.color = ev.evaluate(pos, thumbOff, Color.WHITE) as Int
+            c.drawCircle(cx, r, tr, p)
+        }
     }
+
+    private fun sw(on: Boolean, f: (Boolean) -> Unit): View = PillSwitch(this, on, f)
 
     private fun swRow(t: String, sub: String?, on: Boolean, big: Boolean = false, subColor: Int = mute, f: (Boolean) -> Unit): LinearLayout {
         val r = LinearLayout(this)
@@ -452,10 +486,10 @@ class MainActivity : Activity() {
         val bottom = LinearLayout(this)
         bottom.orientation = LinearLayout.HORIZONTAL
         bottom.gravity = Gravity.CENTER_VERTICAL
-        val st = tv(if (on) "চালু" else "বন্ধ", 12f, if (on) accent else mute, true)
+        val st = tv(if (on) "On" else "Off", 12.5f, if (on) accent else mute, true)
         bottom.addView(st, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         bottom.addView(sw(on) { v ->
-            st.text = if (v) "চালু" else "বন্ধ"
+            st.text = if (v) "On" else "Off"
             st.setTextColor(if (v) accent else mute)
             f(v)
         })
@@ -581,7 +615,7 @@ class MainActivity : Activity() {
         row.gravity = Gravity.CENTER_VERTICAL
         val mc = LinearLayout(this)
         mc.orientation = LinearLayout.VERTICAL
-        mc.addView(tv(if (on) "চালু আছে" else "বন্ধ আছে", 20f, bold = true))
+        mc.addView(tv(if (on) "Auto-reply On" else "Auto-reply Off", 20f, bold = true))
         val st = tv("", 12f, mute)
         mc.addView(st)
         statusTv = st
@@ -708,10 +742,9 @@ class MainActivity : Activity() {
         for (i in Store.insts(c)) {
             if (Store.grp(i.pkg) != null || "${i.pkg}@${i.uid}" in shown) continue
             shown.add("${i.pkg}@${i.uid}")
-            val det = arrayListOf(i.pkg)
-            if (i.uid != 0) det.add("ইউজার ${i.uid}")
-            det.add(fmt.format(Date(i.t)))
-            cells.add(swCell("অচেনা অ্যাপ", det, Store.instOn(c, i.pkg, i.uid)) { v -> Store.setInstOn(c, i.pkg, i.uid, v) })
+            // অ্যাপের আসল নাম পেলে সেটা, না পেলে "Unknown app"; নিচে কোনো বাড়তি লেখা নেই
+            val nm = try { packageManager.getApplicationLabel(packageManager.getApplicationInfo(i.pkg, 0)).toString() } catch (e: Exception) { "" }
+            cells.add(swCell(nm.ifBlank { "Unknown app" }, emptyList(), Store.instOn(c, i.pkg, i.uid)) { v -> Store.setInstOn(c, i.pkg, i.uid, v) })
         }
         grid(apps, cells, 12)
         addSide(apps, 14)
