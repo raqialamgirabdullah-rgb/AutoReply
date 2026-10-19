@@ -368,6 +368,13 @@ class MainActivity : Activity() {
         return l
     }
 
+    // ছোট কার্ডগুলোর গোষ্ঠী: নিজে কোনো কার্ড/বর্ডার নয় (শুধু ব্যাকগ্রাউন্ড), ভেতরের কার্ডগুলোই কার্ড — কার্ডের ভেতরে কার্ড হবে না
+    private fun section(): LinearLayout {
+        val l = LinearLayout(this)
+        l.orientation = LinearLayout.VERTICAL
+        return l
+    }
+
     private fun title(p: LinearLayout, t: String, hint: String? = null) {
         addTo(p, tv(t, 17f, bold = true), 0)
         if (hint != null) addTo(p, tv(hint, 12f, mute), 4)
@@ -385,7 +392,7 @@ class MainActivity : Activity() {
     private fun ghost(t: String, c: Int = accent, f: () -> Unit): TextView {
         val b = tv(t, 13f, c, true)
         b.gravity = Gravity.CENTER
-        b.background = rounded(inner, 10, line)
+        b.background = rounded(Color.parseColor("#1A252B"), 10)
         b.setPadding(d(12), d(10), d(12), d(10))
         b.setOnClickListener { f() }
         return b
@@ -433,8 +440,8 @@ class MainActivity : Activity() {
     private fun swCell(t: String, details: List<String>, on: Boolean, f: (Boolean) -> Unit): LinearLayout {
         val r = LinearLayout(this)
         r.orientation = LinearLayout.VERTICAL
-        r.background = rounded(inner, 12, line)
-        r.setPadding(d(12), d(11), d(10), d(10))
+        r.background = rounded(panel, 16, line)
+        r.setPadding(d(14), d(12), d(12), d(12))
         r.addView(tv(t, 14f, bold = true))
         for (x in details) {
             val dv = tv(x, 10.5f, mute)
@@ -600,13 +607,13 @@ class MainActivity : Activity() {
         // ========== মূল পাতা: শুধু উত্তরের নিয়ম ==========
         // উত্তরের নিয়ম
         val rules = Store.rules(c)
-        val rc = card()
+        val rc = section()
         title(rc, "উত্তরের নিয়ম")
         bullets(rc, listOf("মেসেজে শব্দগুলোর একটা থাকলেই উত্তর যায়", "ওপরের নিয়ম আগে মেলে", "গ্রুপ চ্যাটে উত্তর যায় না"), 6)
         for (r in rules) {
             val rb = LinearLayout(this)
             rb.orientation = LinearLayout.VERTICAL
-            rb.background = rounded(inner, 14, line)
+            rb.background = rounded(panel, 16, line)
             rb.setPadding(d(14), d(12), d(14), d(12))
             val top = LinearLayout(this)
             top.orientation = LinearLayout.HORIZONTAL
@@ -686,7 +693,7 @@ class MainActivity : Activity() {
         addSide(act, 14)
 
         // অ্যাপ/কপির তালিকা (দুই কলামের গ্রিড)
-        val apps = card()
+        val apps = section()
         title(apps, "কোন অ্যাপে চলবে")
         bullets(apps, listOf("প্রতিটি অ্যাপ আলাদা করে চালু বা বন্ধ করা যায়"), 6)
         val cells = ArrayList<View>()
