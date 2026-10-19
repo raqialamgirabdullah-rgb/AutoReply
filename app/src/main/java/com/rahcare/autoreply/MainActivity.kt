@@ -51,10 +51,7 @@ class MainActivity : Activity() {
     private lateinit var scrim: View
     private lateinit var dot: View
     private var menuOpen = false
-    private lateinit var wiz: ScrollView        // সেটআপ উইজার্ড (পুরো পর্দা)
-    private lateinit var wizBox: LinearLayout
-    private var wizDismissed = false
-    private var pendingInstallUrl: String? = null
+    private var pendingInstallUrl: String? = null // অনুমতি দিয়ে ফিরলে আপডেট নিজে শুরু হবে
     private var update: Updater.Info? = null
     private var wantInstall = false             // আপডেট-নোটিফিকেশনে চেপে ঢুকলে সরাসরি ইনস্টল শুরু হবে
     private var statusTv: TextView? = null
@@ -153,17 +150,6 @@ class MainActivity : Activity() {
         frame.addView(col, FrameLayout.LayoutParams(mp, mp))
         frame.addView(scrim, FrameLayout.LayoutParams(mp, mp))
         frame.addView(sideSv, FrameLayout.LayoutParams(sideW(), mp, Gravity.END))
-        wizBox = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(d(24), d(52), d(24), d(40))
-        }
-        wiz = ScrollView(this).apply {
-            addView(wizBox)
-            setBackgroundColor(Color.parseColor("#0B0F14"))
-            visibility = View.GONE
-            isClickable = true
-        }
-        frame.addView(wiz, FrameLayout.LayoutParams(mp, mp))
         setContentView(frame)
     }
 
@@ -187,7 +173,7 @@ class MainActivity : Activity() {
 
     @Suppress("DEPRECATION")
     override fun onBackPressed() {
-        if (wiz.visibility == View.VISIBLE) dismissWizard() else if (menuOpen) closeMenu() else super.onBackPressed()
+        if (menuOpen) closeMenu() else super.onBackPressed()
     }
 
     override fun onNewIntent(i: Intent?) {
@@ -198,11 +184,20 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        var waitPerm = false
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
+            // প্রথমবার এই অনুমতির ডায়ালগ মিটলে তারপর বাকি ধাপ শুরু হবে
+            if (!Store.flag(this, "s_post")) {
+                Store.setFlag(this, "s_post")
+                waitPerm = true
+            }
+        }
         Watchdog.schedule(this)
         Store.ev(this, "অ্যাপ খোলা হয়েছে")
         if (Store.enabled(this)) KeepAliveService.start(this)
         Watchdog.rebind(this, false)
-        if (wiz.visibility == View.VISIBLE) renderWizard() else wizardCheck()
+        if (!waitPerm) autoSetup()
         val pu = pendingInstallUrl
         if (pu != null && packageManager.canRequestPackageInstalls()) {
             pendingInstallUrl = null
@@ -284,158 +279,50 @@ class MainActivity : Activity() {
 
     private fun batteryFree() = getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(packageName)
 
-
-    // ================= সেটআপ উইজার্ড =================
-    // একটা-একটা করে ধাপ দেখায়; ব্যবহারকারী শুধু "অনুমতি দিন" চাপে, অ্যাপ ঠিক সেই সেটিং পেজে নিয়ে যায়।
-    // ফিরে এলে ধাপটা হয়েছে কি না নিজে যাচাই করে পরের ধাপে চলে যায়।
-    // (ফোন এসব অনুমতি অ্যাপকে নিজে দিয়ে নিতে দেয় না; ব্যবহারকারীর একটা চাপ লাগেই, আমরা শুধু পথটা সহজ করি।)
-    private class WStep(
-        val id: String, val title: String, val body: String, val btn: String, val optional: Boolean,
-        val done: () -> Boolean, val act: () -> Unit, val helpText: String? = null, val help: (() -> Unit)? = null
-    )
-
-    private fun hasAutostartScreen(): Boolean {
-        val m = brand()
-        return listOf("xiaomi", "redmi", "poco", "oppo", "realme", "oneplus", "vivo", "iqoo", "huawei", "honor", "samsung", "asus", "infinix", "tecno", "itel").any { m.contains(it) }
-    }
-
-    private fun requestBattery() {
-        try {
-            startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName")))
-        } catch (e: Exception) {
-            try { startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) } catch (x: Exception) {}
+    // প্রথমবার ইনস্টলের পর অনুমতির ধাপগুলো একটার পর একটা নিজে থেকে খোলে (প্রতিটি একবারই)।
+    // ফোন যেগুলো শুধু ব্যবহারকারীর হাতে দিতে দেয় (নোটিফিকেশন অ্যাক্সেস, Accessibility, ব্যাটারি, Auto-start), সেগুলোর স্ক্রিন এখানে খোলা হয়।
+    private fun autoSetup() {
+        if (Store.flag(this, "setup_done")) return
+        // নতুন ইনস্টল কি না, প্রথম কলেই একবার ঠিক করে মনে রাখা হয় (নইলে অনুমতি দেওয়ার পর "নতুন" থাকে না)
+        if (!Store.flag(this, "setup_init")) {
+            Store.setFlag(this, "setup_init")
+            if (!Store.sp(this).contains("on") && !granted()) Store.setFlag(this, "setup_fresh")
         }
-    }
-
-    // নোটিফিকেশন-অ্যাক্সেসের পেজে সরাসরি AutoReply-এর সুইচে নিয়ে যায় (Android 11+), না পারলে সাধারণ তালিকায়
-    private fun openListenerSettings() {
-        try {
-            if (Build.VERSION.SDK_INT >= 30) {
-                val i = Intent(Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS)
-                i.putExtra(Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME, ComponentName(this, ReplyService::class.java).flattenToString())
-                startActivity(i)
-                return
+        val fresh = Store.flag(this, "setup_fresh")
+        if (!granted() && !Store.flag(this, "s_notif")) {
+            Store.setFlag(this, "s_notif")
+            Toast.makeText(this, "AutoReply-কে চালু করুন (নোটিফিকেশন অ্যাক্সেস)", Toast.LENGTH_LONG).show()
+            startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+            return
+        }
+        if (!batteryFree() && !Store.flag(this, "s_batt")) {
+            Store.setFlag(this, "s_batt")
+            try {
+                startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName")))
+            } catch (e: Exception) {
+                startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
             }
-        } catch (e: Exception) {}
-        try { startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) } catch (e: Exception) {}
-    }
-
-    // সুইচ ধূসর থাকলে (APK থেকে ইনস্টল করা অ্যাপে ফোন "restricted settings" আটকে রাখে): অ্যাপের ইনফো পেজ খুলে কী করতে হবে বলে
-    private fun openRestrictedHelp() {
-        try {
-            startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
-            Toast.makeText(this, "ওপরে ডানে ⋮ চাপুন → \"Allow restricted settings\" দিন। তারপর ফিরে এসে আবার \"অনুমতি দিন\" চাপুন।", Toast.LENGTH_LONG).show()
-        } catch (e: Exception) {}
-    }
-
-    private fun wsteps(): List<WStep> {
-        val l = ArrayList<WStep>()
-        if (Build.VERSION.SDK_INT >= 33) {
-            l.add(WStep("post", "নোটিফিকেশন দেখানোর অনুমতি",
-                "অ্যাপ চালু আছে কি না জানাতে ও নতুন আপডেটের খবর দিতে এটা লাগে। পরের পর্দায় \"Allow\" (অনুমতি দিন) চাপুন।",
-                "অনুমতি দিন", false,
-                { checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED },
-                { requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1) }))
+            return
         }
-        l.add(WStep("listen", "মেসেজ পড়ার অনুমতি",
-            "মেসেজ এলে উত্তর দিতে AutoReply-কে নোটিফিকেশন দেখতে দিতে হবে। পরের পর্দায় AutoReply-এর সুইচটা চালু করুন, তারপর \"Allow\" (অনুমতি দিন) চাপুন।",
-            "অনুমতি দিন", false, { granted() }, { openListenerSettings() },
-            "সুইচটা ধূসর হয়ে আছে?", { openRestrictedHelp() }))
-        l.add(WStep("batt", "ব্যাকগ্রাউন্ডে চলার অনুমতি",
-            "অ্যাপ বন্ধ থাকলেও যেন ফোন একে ঘুম পাড়িয়ে না দেয়। পরের পর্দায় \"Allow\" (অনুমতি দিন) চাপুন।",
-            "অনুমতি দিন", false, { batteryFree() }, { requestBattery() }))
-        if (hasAutostartScreen()) {
-            l.add(WStep("auto", "অটো-স্টার্ট চালু করুন",
-                "আপনার ফোন ব্যাকগ্রাউন্ডের অ্যাপ নিজে বন্ধ করে দিতে পারে। পরের পর্দায় AutoReply-এর জন্য অটো-স্টার্ট বা \"ব্যাকগ্রাউন্ডে চলুক\" চালু করে ফিরে আসুন।",
-                "খুলুন", true, { Store.flag(this, "w_auto") }, { Store.setFlag(this, "w_auto"); openAutostart() }))
+        if (!a11yOn() && !Store.flag(this, "s_a11y")) {
+            Store.setFlag(this, "s_a11y")
+            Toast.makeText(this, "দ্রুত উত্তরের জন্য AutoReply-কে Accessibility-তে চালু করুন", Toast.LENGTH_LONG).show()
+            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+            return
         }
-        l.add(WStep("a11y", "দ্রুত উত্তরের সহায়ক (ঐচ্ছিক)",
-            "কিছু ফোন স্ক্রিন বন্ধ থাকলে অ্যাপ থামিয়ে রাখে। এটা চালু করলে সেই সমস্যা কমতে পারে। শুধু WhatsApp/Messenger-এর নোটিফিকেশন-ঘটনা শোনে, পর্দার কিছু পড়ে না। পরের পর্দায় ইনস্টল করা অ্যাপের তালিকা থেকে AutoReply খুঁজে চালু করুন।",
-            "চালু করুন", true, { a11yOn() }, { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }))
-        return l
-    }
-
-    // বাকি ধাপ: হয়নি এবং (ঐচ্ছিক হলে) বাদ দেওয়া হয়নি
-    private fun pending(): List<WStep> = wsteps().filter { !it.done() && !(it.optional && Store.flag(this, "w_skip_${it.id}")) }
-
-    private fun wizardCheck() {
-        if (wizDismissed || Store.flag(this, "w_dismissed")) return
-        if (pending().isNotEmpty()) showWizard()
-    }
-
-    private fun showWizard() {
-        wiz.visibility = View.VISIBLE
-        renderWizard()
-    }
-
-    private fun dismissWizard() {
-        wizDismissed = true
-        Store.setFlag(this, "w_dismissed")
-        wiz.visibility = View.GONE
-        build()
-    }
-
-    private fun renderWizard() {
-        wizBox.removeAllViews()
-        val all = wsteps()
-        val pend = pending()
-        if (pend.isEmpty()) { renderDone(); return }
-        val s = pend[0]
-        val idx = all.indexOfFirst { it.id == s.id }
-        wizBox.addView(tv("সেটআপ · ধাপ ${idx + 1} / ${all.size}", 12f, mute))
-        val bar = LinearLayout(this)
-        bar.orientation = LinearLayout.HORIZONTAL
-        for (k in all.indices) {
-            val seg = View(this)
-            seg.background = rounded(if (k < idx) accent else line, 3)
-            bar.addView(seg, LinearLayout.LayoutParams(0, d(4), 1f).apply { if (k > 0) leftMargin = d(4) })
+        if (fresh && !Store.flag(this, "s_auto")) {
+            Store.setFlag(this, "s_auto")
+            openAutostart()
+            return
         }
-        wizBox.addView(bar, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-            topMargin = d(10)
-            bottomMargin = d(28)
-        })
-        wizBox.addView(tv(s.title, 24f, bold = true))
-        val b = tv(s.body, 15f, mute)
-        b.setPadding(0, d(12), 0, d(24))
-        b.setLineSpacing(0f, 1.25f)
-        wizBox.addView(b)
-        addTo(wizBox, primary(s.btn) { s.act() }, 0)
-        val ht = s.helpText
-        val hf = s.help
-        if (ht != null && hf != null) addTo(wizBox, ghost(ht) { hf() }, 12)
-        if (s.optional) addTo(wizBox, ghost("এখন নয়, বাদ দিন", mute) {
-            Store.setFlag(this, "w_skip_${s.id}")
-            renderWizard()
-        }, 12)
-        addTo(wizBox, ghost("পরে করব", mute) { dismissWizard() }, 4)
-    }
-
-    private fun renderDone() {
-        wizBox.removeAllViews()
-        wizBox.addView(tv("✔", 48f, accent))
-        wizBox.addView(tv("সব ঠিক আছে", 26f, bold = true))
-        val b = tv("AutoReply এখন মেসেজের অপেক্ষায়। উত্তরের নিয়ম মূল পাতা থেকে বদলাতে পারবেন।", 15f, mute)
-        b.setPadding(0, d(12), 0, d(24))
-        wizBox.addView(b)
-        addTo(wizBox, primary("শুরু করুন") { finishWizard() }, 0)
-    }
-
-    private fun finishWizard() {
-        Store.setFlag(this, "w_dismissed")
-        wiz.visibility = View.GONE
-        // নতুন ইনস্টলে সব ধাপ শেষে মূল সুইচ নিজে চালু হয়
-        if (!Store.sp(this).contains("on")) {
+        Store.setFlag(this, "setup_done")
+        if (fresh) {
+            // নতুন ইনস্টলে সব ধাপ শেষে মূল সুইচ নিজে চালু হয়
             Store.setEnabled(this, true)
             KeepAliveService.start(this)
             Watchdog.schedule(this)
             Watchdog.rebind(this, false)
         }
-        build()
-    }
-
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (wiz.visibility == View.VISIBLE) renderWizard()
     }
 
     private fun granted() = Watchdog.granted(this)
@@ -810,15 +697,20 @@ class MainActivity : Activity() {
         // ========== সাইডবারের বাকি অংশ ==========
         // অনুমতি: শুধু যেগুলো বাকি আছে সেগুলোর বোতাম দেখায়; সব ঠিক থাকলে কার্ডটাই থাকে না।
         // শক্তিশালী ব্যাকগ্রাউন্ড মোড সবসময় চালু (আলাদা সুইচ নেই)
-        val todo = pending()
-        if (todo.isNotEmpty()) {
+        val missing = ArrayList<View>()
+        if (!ok) missing.add(ghost("নোটিফিকেশন অ্যাক্সেস দিন", warn) { startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) })
+        if (!a11yOn()) missing.add(ghost("Accessibility চালু করুন", warn) { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) })
+        if (!free) missing.add(ghost("ব্যাটারি সেভার বাদ দিন", warn) {
+            try {
+                startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName")))
+            } catch (e: Exception) {
+                startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+            }
+        })
+        if (missing.isNotEmpty()) {
             val perm = card(warn)
-            title(perm, "সেটআপ বাকি আছে", "${todo.size}টা ধাপ বাকি। এক-এক করে অনুমতি দিন, অ্যাপ প্রতিটি ধাপে সঠিক জায়গায় নিয়ে যাবে।")
-            addTo(perm, primary("সেটআপ শেষ করুন") {
-                closeMenu()
-                wizDismissed = false
-                showWizard()
-            }, 12)
+            title(perm, "অনুমতি বাকি আছে")
+            grid(perm, missing, 12)
             addSide(perm, 16)
         }
 
