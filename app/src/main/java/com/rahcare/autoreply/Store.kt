@@ -149,9 +149,10 @@ object Store {
     fun aiModel(c: Context) = p(c).getString("ai_model", "") ?: ""
     fun aiBase(c: Context) = p(c).getString("ai_base", "") ?: ""
     fun aiInfo(c: Context) = p(c).getString("ai_info", "") ?: ""
+    fun aiCmd(c: Context) = p(c).getString("ai_cmd", "") ?: ""
     fun saveAi(c: Context, g: AiCfg) = p(c).edit()
         .putString("ai_prov", g.prov).putString("ai_key", g.key).putString("ai_model", g.model)
-        .putString("ai_base", g.base).putString("ai_info", g.info).apply()
+        .putString("ai_base", g.base).putString("ai_info", g.info).putString("ai_cmd", g.cmd).apply()
 
     fun rules(c: Context): MutableList<Rule> {
         val s = p(c).getString("rules", null)

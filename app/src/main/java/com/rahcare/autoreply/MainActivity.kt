@@ -718,7 +718,7 @@ class MainActivity : Activity() {
         val aiCard = card()
         addTo(aiCard, swRow("AI স্বয়ংক্রিয় চ্যাট", null, Store.aiOn(c)) { v ->
             Store.setAiOn(c, v)
-            if (v && !Ai.configured(Ai.cfg(c))) Toast.makeText(c, "আগে \"AI সেটিংস\"-এ API কী ও প্রতিষ্ঠানের তথ্য দিন", Toast.LENGTH_LONG).show()
+            if (v && !Ai.configured(Ai.cfg(c))) Toast.makeText(c, "আগে \"AI সেটিংস\"-এ API কী এবং নির্দেশ বা তথ্য দিন", Toast.LENGTH_LONG).show()
         }, 0)
         addTo(aiCard, ghost("AI সেটিংস") { aiDialog() }, 10)
         addSide(aiCard, 14)
@@ -831,7 +831,7 @@ class MainActivity : Activity() {
         val ht = LinearLayout(this)
         ht.orientation = LinearLayout.VERTICAL
         ht.addView(tv("AI সহকারী", 20f, bold = true))
-        ht.addView(tv("নিয়ম না মিললে AI প্রতিষ্ঠানের তথ্য থেকে উত্তর দেবে", 12f, mute))
+        ht.addView(tv("নিয়ম না মিললে AI নির্দেশ ও তথ্য দেখে নিজে ভেবে উত্তর দেবে", 12f, mute))
         val hlp = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
         hlp.leftMargin = d(12)
         head.addView(ht, hlp)
@@ -860,9 +860,14 @@ class MainActivity : Activity() {
         val chip = tv("", 12.5f, mute, true)
         addTo(box, chip, 8)
 
-        // ২. প্রতিষ্ঠানের তথ্য
+        // ২. নির্দেশ: কী করবে, কী করবে না
+        label(box, "নির্দেশ (কী করবে, কী করবে না)", "কীভাবে কথা বলবে, কোন বিষয়ে কী করবে বা করবে না। AI এগুলো সবার আগে মানবে।")
+        val cmd = field("যেমন: বন্ধুর মতো সহজ বাংলায় কথা বলো; দাম বা সময় নিজে বলো না, বলো আমাদের টিম জানাবে", cur.cmd, lines = 5)
+        addTo(box, cmd, 8)
+
+        // ৩. প্রতিষ্ঠানের তথ্য
         label(box, "প্রতিষ্ঠানের তথ্য", "নাম, সেবা, দাম, ঠিকানা, খোলার সময়, যোগাযোগ, সাধারণ প্রশ্ন-উত্তর। শুধু মেসেজের লেখা AI-তে যায়, নাম বা নম্বর যায় না।")
-        val info = field("যা লিখবেন, AI শুধু সেখান থেকেই উত্তর দেবে", cur.info, lines = 6)
+        val info = field("AI আগে এখান থেকে উত্তর দেবে; না থাকলে নিজে ভেবে ও অনলাইনে খুঁজে বলবে", cur.info, lines = 6)
         addTo(box, info, 8)
 
         // ৩. পরীক্ষা
@@ -903,7 +908,7 @@ class MainActivity : Activity() {
 
         fun readCfg() = AiCfg(
             when (rg.checkedRadioButtonId) { rbG.id -> "gemini"; rbC.id -> "claude"; rbO.id -> "openai"; else -> "auto" },
-            key.text.toString().trim(), model.text.toString().trim(), base.text.toString().trim(), info.text.toString().trim()
+            key.text.toString().trim(), model.text.toString().trim(), base.text.toString().trim(), info.text.toString().trim(), cmd.text.toString().trim()
         )
         fun refresh() {
             val g = readCfg()
