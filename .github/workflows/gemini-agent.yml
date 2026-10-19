@@ -62,7 +62,7 @@ jobs:
 
           [[rule]]
           toolName = "run_shell_command"
-          commandPrefix = ["git", "gh", "ls", "cat", "grep", "sed"]
+          commandPrefix = ["git", "gh", "ls", "cat", "grep", "sed", "echo", "head", "tail", "wc", "pwd"]
           decision = "allow"
           priority = 200
           allowRedirection = true
@@ -98,7 +98,8 @@ jobs:
             }
           prompt: |-
             তুমি এই রিপোজিটরির (Android/Kotlin অ্যাপ) একজন ডেভেলপার। আগে GEMINI.md পড়ো এবং তার নিয়ম মেনে চলো।
-            কাজটা $REQUEST এনভায়রনমেন্ট ভ্যারিয়েবলে আছে (শুরুর "@gemini-cli" বাদ দিয়ে পড়ো); ইস্যু নম্বর $ISSUE_NUMBER, রিপো $REPO।
+            ব্যবহারকারীর কাজ (শুরুর "@gemini-cli" বাদ দিয়ে পড়ো): ${{ github.event.comment.body }}
+            ইস্যু নম্বর ${{ github.event.issue.number }}, রিপো ${{ github.repository }}। নিচের ধাপগুলোতে $ISSUE_NUMBER মানে এই ইস্যু নম্বর (${{ github.event.issue.number }})।
             ধাপগুলো:
             1. `git checkout -b gemini/issue-$ISSUE_NUMBER` দিয়ে নতুন ব্রাঞ্চ খোলো।
             2. কাজটা সবচেয়ে ছোট ও নিরাপদ বদলে করো। শুধু যা দরকার সেটুকু ফাইল বদলাও।
