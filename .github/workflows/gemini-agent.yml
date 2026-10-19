@@ -1,0 +1,70 @@
+name: Gemini Agent
+
+# ইস্যু বা পুল রিকোয়েস্টের কমেন্টে "@gemini-cli <কাজ>" লিখলে Gemini কাজটা করে নতুন ব্রাঞ্চে পুল রিকোয়েস্ট খোলে।
+# শুধু রিপোজিটরির মালিক চালাতে পারবে; main-এ সরাসরি কিছু পুশ হয় না (আপনি দেখে মার্জ করবেন)।
+on:
+  issue_comment:
+    types: [created]
+
+concurrency:
+  group: gemini-agent-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  gemini:
+    if: >-
+      startsWith(github.event.comment.body, '@gemini-cli') &&
+      github.event.comment.user.login == github.repository_owner
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Git identity
+        run: |
+          git config user.name "gemini-agent"
+          git config user.email "gemini-agent@users.noreply.github.com"
+
+      - name: Run Gemini
+        uses: google-github-actions/run-gemini-cli@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REQUEST: ${{ github.event.comment.body }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          REPO: ${{ github.repository }}
+        with:
+          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+          settings: |-
+            {
+              "tools": {
+                "core": [
+                  "read_file", "write_file", "replace", "glob", "search_file_content", "list_directory",
+                  "run_shell_command(git)", "run_shell_command(gh)", "run_shell_command(ls)",
+                  "run_shell_command(cat)", "run_shell_command(grep)", "run_shell_command(sed)"
+                ]
+              },
+              "coreTools": [
+                "read_file", "write_file", "replace", "glob", "search_file_content", "list_directory",
+                "run_shell_command(git)", "run_shell_command(gh)", "run_shell_command(ls)",
+                "run_shell_command(cat)", "run_shell_command(grep)", "run_shell_command(sed)"
+              ]
+            }
+          prompt: |-
+            তুমি এই রিপোজিটরির (Android/Kotlin অ্যাপ) একজন ডেভেলপার। আগে GEMINI.md পড়ো এবং তার নিয়ম মেনে চলো।
+            কাজটা $REQUEST এনভায়রনমেন্ট ভ্যারিয়েবলে আছে (শুরুর "@gemini-cli" বাদ দিয়ে পড়ো); ইস্যু নম্বর $ISSUE_NUMBER, রিপো $REPO।
+            ধাপগুলো:
+            1. `git checkout -b gemini/issue-$ISSUE_NUMBER` দিয়ে নতুন ব্রাঞ্চ খোলো।
+            2. কাজটা সবচেয়ে ছোট ও নিরাপদ বদলে করো। শুধু যা দরকার সেটুকু ফাইল বদলাও।
+            3. কমিট করো এবং `git push -u origin HEAD` দিয়ে ব্রাঞ্চটা পুশ করো।
+            4. `gh pr create --base main --fill` দিয়ে পুল রিকোয়েস্ট খোলো।
+            5. `gh issue comment $ISSUE_NUMBER --body "<কী করলে ও কেন, এক-দুই লাইনে>"` দিয়ে সারসংক্ষেপ জানাও।
+            কঠোর নিষেধ: main-এ সরাসরি পুশ নয়; .github/workflows, সাইনিং-সংক্রান্ত ফাইল, বা কোনো সিক্রেট ছোঁবে না।
+            কাজটা করা সম্ভব না হলে কোড না বদলে ইস্যুতে কমেন্ট করে কারণ জানাও।
