@@ -50,6 +50,7 @@ jobs:
         continue-on-error: true
         uses: google-github-actions/run-gemini-cli@v0
         env:
+          GEMINI_CLI_TRUST_WORKSPACE: "true"   # CI-তে ফোল্ডার বিশ্বস্ত না হলে Gemini CLI কাজ শুরুই করে না
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REQUEST: ${{ github.event.comment.body }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
@@ -83,8 +84,8 @@ jobs:
             কঠোর নিষেধ: main-এ সরাসরি পুশ নয়; .github/workflows, সাইনিং-সংক্রান্ত ফাইল, বা কোনো সিক্রেট ছোঁবে না।
             কাজটা করা সম্ভব না হলে কোড না বদলে ইস্যুতে কমেন্ট করে কারণ জানাও।
 
-      - name: Report result to the issue
-        if: always()
+      - name: Report failure to the issue
+        if: always() && steps.gemini.outcome != 'success'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
@@ -102,3 +103,7 @@ jobs:
             echo; echo "[রানের লিংক]($RUN_URL)"
           } > /tmp/report.md
           gh issue comment "$ISSUE_NUMBER" --body-file /tmp/report.md
+
+      - name: Fail the job if Gemini failed
+        if: steps.gemini.outcome == 'failure'
+        run: exit 1
