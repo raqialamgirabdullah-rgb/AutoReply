@@ -175,13 +175,20 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        var waitPerm = false
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
+            // প্রথমবার এই অনুমতির ডায়ালগ মিটলে তারপর বাকি ধাপ শুরু হবে
+            if (!Store.flag(this, "s_post")) {
+                Store.setFlag(this, "s_post")
+                waitPerm = true
+            }
         }
         Watchdog.schedule(this)
         Store.ev(this, "অ্যাপ খোলা হয়েছে")
         if (Store.enabled(this)) KeepAliveService.start(this)
         Watchdog.rebind(this, false)
+        if (!waitPerm) autoSetup()
         update = Updater.saved(this)
         if (update == null) Updater.clearNotice(this)
         build()
@@ -250,6 +257,56 @@ class MainActivity : Activity() {
                 runOnUiThread { Toast.makeText(this, "ডাউনলোড বা ইনস্টল শুরু করা গেল না (${e.javaClass.simpleName}: ${e.message?.take(70)}) — নিচের ব্রাউজার বোতামটা ব্যবহার করুন", Toast.LENGTH_LONG).show() }
             }
         }.start()
+    }
+
+    private fun a11yOn() = (Settings.Secure.getString(contentResolver, "enabled_accessibility_services") ?: "").contains("$packageName/")
+
+    private fun batteryFree() = getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(packageName)
+
+    // প্রথমবার ইনস্টলের পর অনুমতির ধাপগুলো একটার পর একটা নিজে থেকে খোলে (প্রতিটি একবারই)।
+    // ফোন যেগুলো শুধু ব্যবহারকারীর হাতে দিতে দেয় (নোটিফিকেশন অ্যাক্সেস, Accessibility, ব্যাটারি, Auto-start), সেগুলোর স্ক্রিন এখানে খোলা হয়।
+    private fun autoSetup() {
+        if (Store.flag(this, "setup_done")) return
+        // নতুন ইনস্টল কি না, প্রথম কলেই একবার ঠিক করে মনে রাখা হয় (নইলে অনুমতি দেওয়ার পর "নতুন" থাকে না)
+        if (!Store.flag(this, "setup_init")) {
+            Store.setFlag(this, "setup_init")
+            if (!Store.sp(this).contains("on") && !granted()) Store.setFlag(this, "setup_fresh")
+        }
+        val fresh = Store.flag(this, "setup_fresh")
+        if (!granted() && !Store.flag(this, "s_notif")) {
+            Store.setFlag(this, "s_notif")
+            Toast.makeText(this, "AutoReply-কে চালু করুন (নোটিফিকেশন অ্যাক্সেস)", Toast.LENGTH_LONG).show()
+            startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+            return
+        }
+        if (!batteryFree() && !Store.flag(this, "s_batt")) {
+            Store.setFlag(this, "s_batt")
+            try {
+                startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName")))
+            } catch (e: Exception) {
+                startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+            }
+            return
+        }
+        if (!a11yOn() && !Store.flag(this, "s_a11y")) {
+            Store.setFlag(this, "s_a11y")
+            Toast.makeText(this, "দ্রুত উত্তরের জন্য AutoReply-কে Accessibility-তে চালু করুন", Toast.LENGTH_LONG).show()
+            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+            return
+        }
+        if (fresh && !Store.flag(this, "s_auto")) {
+            Store.setFlag(this, "s_auto")
+            openAutostart()
+            return
+        }
+        Store.setFlag(this, "setup_done")
+        if (fresh) {
+            // নতুন ইনস্টলে সব ধাপ শেষে মূল সুইচ নিজে চালু হয়
+            Store.setEnabled(this, true)
+            KeepAliveService.start(this)
+            Watchdog.schedule(this)
+            Watchdog.rebind(this, false)
+        }
     }
 
     private fun granted() = Watchdog.granted(this)
@@ -506,8 +563,6 @@ class MainActivity : Activity() {
         if (!ok) {
             addTo(main, tv("অপশনটা ধূসর থাকলে: ফোনের Settings → Apps → এই অ্যাপ → ওপরে ডানে ⋮ → \"Allow restricted settings\" দিন, তারপর আবার চেষ্টা করুন।", 12f, mute), 10)
             addTo(main, primary("নোটিফিকেশন অ্যাক্সেস দিন") { startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }, 10)
-        } else if (on && !free) {
-            addTo(main, tv("অ্যাপ বন্ধ থাকলেও উত্তর যেতে নিচের \"ব্যাকগ্রাউন্ডে চালু রাখা\" অংশের সেটিং ঠিক করা দরকার।", 12f, warn), 10)
         }
         addSide(main, 16)
 
@@ -559,30 +614,24 @@ class MainActivity : Activity() {
         }
 
         // ========== সাইডবারের বাকি অংশ ==========
-        // অনুমতি ও ব্যাকগ্রাউন্ড: দুই কলামের গ্রিড, কোনো বর্ণনা নেই
-        val a11yOn = (Settings.Secure.getString(contentResolver, "enabled_accessibility_services") ?: "").contains("$packageName/")
-        val perm = card()
-        grid(perm, listOf(
-            ghost(if (ok) "✔ নোটিফিকেশন অ্যাক্সেস" else "নোটিফিকেশন অ্যাক্সেস দিন", if (ok) accent else warn) {
-                startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
-            },
-            ghost(if (a11yOn) "✔ Accessibility" else "Accessibility চালু করুন", if (a11yOn) accent else warn) {
-                startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-            },
-            ghost(if (free) "✔ ব্যাটারি সেভার বন্ধ" else "ব্যাটারি সেভার বাদ দিন", if (free) accent else warn) {
-                try {
-                    startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName")))
-                } catch (e: Exception) {
-                    startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
-                }
-            },
-            ghost("Auto-start অনুমতি") { openAutostart() }
-        ), 0)
-        addTo(perm, swRow("শক্তিশালী ব্যাকগ্রাউন্ড মোড", null, Store.strong(c)) { v ->
-            Store.setStrong(c, v)
-            KeepAliveService.start(c)
-        }, 12)
-        addSide(perm, 16)
+        // অনুমতি: শুধু যেগুলো বাকি আছে সেগুলোর বোতাম দেখায়; সব ঠিক থাকলে কার্ডটাই থাকে না।
+        // শক্তিশালী ব্যাকগ্রাউন্ড মোড সবসময় চালু (আলাদা সুইচ নেই)
+        val missing = ArrayList<View>()
+        if (!ok) missing.add(ghost("নোটিফিকেশন অ্যাক্সেস দিন", warn) { startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) })
+        if (!a11yOn()) missing.add(ghost("Accessibility চালু করুন", warn) { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) })
+        if (!free) missing.add(ghost("ব্যাটারি সেভার বাদ দিন", warn) {
+            try {
+                startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName")))
+            } catch (e: Exception) {
+                startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+            }
+        })
+        if (missing.isNotEmpty()) {
+            val perm = card(warn)
+            title(perm, "অনুমতি বাকি আছে")
+            grid(perm, missing, 12)
+            addSide(perm, 16)
+        }
 
         // AI স্বয়ংক্রিয় চ্যাট: নিয়ম না মিললে প্রতিষ্ঠানের তথ্য থেকে AI উত্তর দেয়
         val aiCard = card()

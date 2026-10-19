@@ -106,8 +106,12 @@ object Store {
         } catch (e: Exception) {}
     }
     // "শক্তিশালী মোড": CPU জাগিয়ে রাখে (ব্যাটারি বেশি খরচ), ফোন যে অ্যাপকে ঘুম পাড়ায় তার জন্য
-    fun strong(c: Context) = p(c).getBoolean("strong", false)
+    fun strong(c: Context) = p(c).getBoolean("strong", true)
     fun setStrong(c: Context, v: Boolean) = p(c).edit().putBoolean("strong", v).apply()
+
+    // প্রথমবার চালুর ধাপগুলো একবারই চেষ্টা করা হয়েছে কি না, তার চিহ্ন
+    fun flag(c: Context, k: String) = p(c).getBoolean("f_$k", false)
+    fun setFlag(c: Context, k: String) = p(c).edit().putBoolean("f_$k", true).apply()
 
     fun events(c: Context) = p(c).getString("ev", "") ?: ""
 
