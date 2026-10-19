@@ -33,8 +33,7 @@ object Store {
         return when {
             l.contains("w4b") -> "WhatsApp Business"
             l.contains("whatsapp") -> "WhatsApp"
-            l.startsWith("com.facebook.orca") -> "Messenger"
-            l.startsWith("com.facebook.lite") -> "Facebook Lite"
+            l.startsWith("com.facebook.orca") || l.startsWith("com.facebook.lite") -> "Facebook" // Messenger ও Facebook Lite (ক্লোনসহ) সব এক
             l.startsWith("org.telegram.messenger") -> "Telegram"
             l.startsWith("com.imo.android.imoim") -> "IMO"
             else -> null
@@ -50,7 +49,7 @@ object Store {
         return if (parts.isEmpty()) base else "$base (${parts.joinToString(", ")})"
     }
 
-    // একই সুইচে চলা দল: WhatsApp, WhatsApp Business ও তাদের সব ক্লোন/ডুয়াল কপি একসাথে "WhatsApp"; অচেনা অ্যাপ হলে null
+    // একই সুইচে চলা দল: WhatsApp (Business ও ক্লোনসহ) = "WhatsApp"; Messenger ও Facebook Lite (ক্লোনসহ) = "Facebook"; অচেনা অ্যাপ হলে null
     fun grp(pkg: String): String? = family(pkg)?.let { if (it == "WhatsApp Business") "WhatsApp" else it }
 
     // আগের আলাদা আলাদা সেটিং (থাকলে); নতুন দলের সুইচ প্রথমবার আগের পছন্দ থেকে শুরু হয়

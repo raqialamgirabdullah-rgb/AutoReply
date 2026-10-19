@@ -69,6 +69,15 @@ object Replier {
             return
         }
 
+        // টেলিগ্রামের চ্যানেল, গ্রুপ ও বটে উত্তর পাঠানো হবে না (শুধু ব্যক্তির সাথে সরাসরি চ্যাটে)
+        if (Store.grp(pkg) == "Telegram") {
+            val cid = (n.channelId ?: "").lowercase()
+            if (cid.contains("channel") || cid.contains("group") || sender.trim().lowercase().endsWith("bot")) {
+                log(c, pkg, uid, sender, text, "টেলিগ্রামের চ্যানেল/গ্রুপ/বট, তাই বাদ (channelId=$cid)")
+                return
+            }
+        }
+
         if (!catchUp) {
             val now = System.currentTimeMillis()
             val dk = "$pkg|$sender|$text|$mid"
