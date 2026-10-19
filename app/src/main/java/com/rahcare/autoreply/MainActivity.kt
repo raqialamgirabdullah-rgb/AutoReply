@@ -878,7 +878,9 @@ class MainActivity : Activity() {
                     val r = Ai.test(g, q)
                     runOnUiThread {
                         testOut.setTextColor(if (r.first != null) ink else warn)
-                        testOut.text = r.first ?: ("ব্যর্থ: " + r.second)
+                        testOut.text = if (r.first != null) "প্রশ্ন: $q\n\n" + r.first else ("ব্যর্থ: " + r.second)
+                        // উত্তর এলে ঘর খালি হয় (আবার নতুন প্রশ্ন লেখার জন্য); ব্যর্থ হলে প্রশ্ন থাকে, যেন আবার চেষ্টা করা যায়
+                        if (r.first != null && testQ.text.toString().trim() == q) testQ.setText("")
                     }
                 }.start()
             }
