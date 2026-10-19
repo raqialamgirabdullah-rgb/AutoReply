@@ -742,9 +742,14 @@ class MainActivity : Activity() {
         for (i in Store.insts(c)) {
             if (Store.grp(i.pkg) != null || "${i.pkg}@${i.uid}" in shown) continue
             shown.add("${i.pkg}@${i.uid}")
-            // অ্যাপের আসল নাম পেলে সেটা, না পেলে "Unknown app"; নিচে কোনো বাড়তি লেখা নেই
+            // অচেনা অ্যাপ: নাম (পেলে), প্যাকেজ, ইউজার ও শেষ নোটিফিকেশনের সময়সহ
             val nm = try { packageManager.getApplicationLabel(packageManager.getApplicationInfo(i.pkg, 0)).toString() } catch (e: Exception) { "" }
-            cells.add(swCell(nm.ifBlank { "Unknown app" }, emptyList(), Store.instOn(c, i.pkg, i.uid)) { v -> Store.setInstOn(c, i.pkg, i.uid, v) })
+            val det = ArrayList<String>()
+            if (nm.isNotBlank()) det.add(nm)
+            det.add(i.pkg)
+            if (i.uid != 0) det.add("ইউজার ${i.uid}")
+            det.add(fmt.format(Date(i.t)))
+            cells.add(swCell("অচেনা অ্যাপ", det, Store.instOn(c, i.pkg, i.uid)) { v -> Store.setInstOn(c, i.pkg, i.uid, v) })
         }
         grid(apps, cells, 12)
         addSide(apps, 14)
