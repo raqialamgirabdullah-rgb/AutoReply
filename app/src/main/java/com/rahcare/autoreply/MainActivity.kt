@@ -731,17 +731,22 @@ class MainActivity : Activity() {
 
         val rg = RadioGroup(this)
         rg.orientation = LinearLayout.VERTICAL
+        val rbG = RadioButton(this)
+        rbG.id = View.generateViewId()
+        rbG.text = "Gemini (Google)"
+        rbG.setTextColor(ink)
         val rb1 = RadioButton(this)
         rb1.id = View.generateViewId()
         rb1.text = "Claude (Anthropic)"
         rb1.setTextColor(ink)
         val rb2 = RadioButton(this)
         rb2.id = View.generateViewId()
-        rb2.text = "OpenAI-সামঞ্জস্যপূর্ণ (OpenAI, Gemini, DeepSeek…)"
+        rb2.text = "OpenAI-সামঞ্জস্যপূর্ণ (OpenAI, DeepSeek…)"
         rb2.setTextColor(ink)
+        rg.addView(rbG)
         rg.addView(rb1)
         rg.addView(rb2)
-        rg.check(if (cur.prov == "claude") rb1.id else rb2.id)
+        rg.check(when (cur.prov) { "claude" -> rb1.id; "openai" -> rb2.id; else -> rbG.id })
         addTo(box, rg, 10)
 
         val key = EditText(this)
@@ -757,9 +762,12 @@ class MainActivity : Activity() {
         base.setText(cur.base)
         addTo(box, base, 2)
         fun refresh() {
-            val cl = rb1.isChecked
-            model.hint = if (cl) "মডেল (খালি রাখলে ${Ai.DEF_CLAUDE_MODEL})" else "মডেলের নাম (যেমন gpt-4o-mini)"
-            base.visibility = if (cl) View.GONE else View.VISIBLE
+            model.hint = when {
+                rbG.isChecked -> "মডেল (খালি রাখলে ${Ai.DEF_GEMINI_MODEL})"
+                rb1.isChecked -> "মডেল (খালি রাখলে ${Ai.DEF_CLAUDE_MODEL})"
+                else -> "মডেলের নাম (যেমন gpt-4o-mini)"
+            }
+            base.visibility = if (rb2.isChecked) View.VISIBLE else View.GONE
         }
         rg.setOnCheckedChangeListener { _, _ -> refresh() }
         refresh()
@@ -773,7 +781,7 @@ class MainActivity : Activity() {
         addTo(box, info, 10)
 
         fun readCfg() = AiCfg(
-            if (rb1.isChecked) "claude" else "openai",
+            if (rbG.isChecked) "gemini" else if (rb1.isChecked) "claude" else "openai",
             key.text.toString().trim(), model.text.toString().trim(),
             base.text.toString().trim(), info.text.toString().trim()
         )

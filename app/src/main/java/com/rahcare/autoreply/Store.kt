@@ -144,7 +144,7 @@ object Store {
     // ---------- AI স্বয়ংক্রিয় চ্যাট: নিয়ম না মিললে প্রতিষ্ঠানের তথ্য থেকে AI উত্তর দেয় ----------
     fun aiOn(c: Context) = p(c).getBoolean("ai_on", false)
     fun setAiOn(c: Context, v: Boolean) = p(c).edit().putBoolean("ai_on", v).apply()
-    fun aiProvider(c: Context) = p(c).getString("ai_prov", "claude") ?: "claude"
+    fun aiProvider(c: Context) = p(c).getString("ai_prov", "gemini") ?: "gemini"
     fun aiKey(c: Context) = p(c).getString("ai_key", "") ?: ""
     fun aiModel(c: Context) = p(c).getString("ai_model", "") ?: ""
     fun aiBase(c: Context) = p(c).getString("ai_base", "") ?: ""
