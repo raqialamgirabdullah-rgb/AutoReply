@@ -54,6 +54,7 @@ class MainActivity : Activity() {
     private lateinit var wiz: ScrollView        // সেটআপ উইজার্ড (পুরো পর্দা)
     private lateinit var wizBox: LinearLayout
     private var wizDismissed = false
+    private var pendingInstallUrl: String? = null
     private var update: Updater.Info? = null
     private var wantInstall = false             // আপডেট-নোটিফিকেশনে চেপে ঢুকলে সরাসরি ইনস্টল শুরু হবে
     private var statusTv: TextView? = null
@@ -202,6 +203,11 @@ class MainActivity : Activity() {
         if (Store.enabled(this)) KeepAliveService.start(this)
         Watchdog.rebind(this, false)
         if (wiz.visibility == View.VISIBLE) renderWizard() else wizardCheck()
+        val pu = pendingInstallUrl
+        if (pu != null && packageManager.canRequestPackageInstalls()) {
+            pendingInstallUrl = null
+            install(pu)
+        }
         update = Updater.saved(this)
         if (update == null) Updater.clearNotice(this)
         build()
@@ -238,7 +244,9 @@ class MainActivity : Activity() {
     // APK নামিয়ে PackageInstaller দিয়ে ইনস্টল করে; ফোন নিশ্চিত করার পর্দা দেখাবে
     private fun install(url: String) {
         if (!packageManager.canRequestPackageInstalls()) {
-            Toast.makeText(this, "এই অ্যাপকে \"Install unknown apps\" অনুমতি দিয়ে ফিরে এসে আবার চাপুন", Toast.LENGTH_LONG).show()
+            // অনুমতি দিয়ে ফিরে এলেই আপডেট নিজে থেকে শুরু হবে (আবার চাপতে হবে না)
+            pendingInstallUrl = url
+            Toast.makeText(this, "পরের পর্দায় \"Allow from this source\" চালু করে ফিরে আসুন — আপডেট নিজেই শুরু হবে", Toast.LENGTH_LONG).show()
             startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName")))
             return
         }
@@ -336,10 +344,6 @@ class MainActivity : Activity() {
         l.add(WStep("batt", "ব্যাকগ্রাউন্ডে চলার অনুমতি",
             "অ্যাপ বন্ধ থাকলেও যেন ফোন একে ঘুম পাড়িয়ে না দেয়। পরের পর্দায় \"Allow\" (অনুমতি দিন) চাপুন।",
             "অনুমতি দিন", false, { batteryFree() }, { requestBattery() }))
-        l.add(WStep("install", "আপডেট ইনস্টলের অনুমতি",
-            "নতুন সংস্করণ এলে যেন এক চাপেই আপডেট হয়ে যায়। পরের পর্দায় \"Allow from this source\" (এই সোর্স থেকে অনুমতি) চালু করুন।",
-            "অনুমতি দিন", false, { packageManager.canRequestPackageInstalls() },
-            { startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName"))) }))
         if (hasAutostartScreen()) {
             l.add(WStep("auto", "অটো-স্টার্ট চালু করুন",
                 "আপনার ফোন ব্যাকগ্রাউন্ডের অ্যাপ নিজে বন্ধ করে দিতে পারে। পরের পর্দায় AutoReply-এর জন্য অটো-স্টার্ট বা \"ব্যাকগ্রাউন্ডে চলুক\" চালু করে ফিরে আসুন।",
