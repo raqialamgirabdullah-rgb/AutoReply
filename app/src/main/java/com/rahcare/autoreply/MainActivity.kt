@@ -688,22 +688,24 @@ class MainActivity : Activity() {
         // অ্যাপ/কপির তালিকা (দুই কলামের গ্রিড)
         val apps = card()
         title(apps, "কোন অ্যাপে চলবে")
-        bullets(apps, listOf("প্রতিটি অ্যাপ আলাদা করে চালু বা বন্ধ করা যায়", "ক্লোন বা ডুয়াল কপির নোটিফিকেশন এলে এখানে নিজে যোগ হয়"), 6)
-        val shown = HashSet<String>()
+        bullets(apps, listOf("WhatsApp, WhatsApp Business ও তাদের ক্লোন/ডুয়াল কপি একটাই সুইচে চলে", "অচেনা কোনো ক্লোন অ্যাপের নোটিফিকেশন এলে এখানে আলাদা সুইচে নিজে যোগ হয়"), 6)
         val cells = ArrayList<View>()
         val fmt = SimpleDateFormat("dd MMM HH:mm", Locale.US)
-        fun arow(pkg: String, uid: Int, time: String?) {
-            val det = ArrayList<String>()
-            if (!Store.APPS.containsKey(pkg)) det.add(pkg)
-            if (uid != 0) det.add("ইউজার $uid")
-            if (time != null) det.add(time)
-            cells.add(swCell(Store.family(pkg) ?: "অচেনা অ্যাপ", det, Store.instOn(c, pkg, uid)) { v -> Store.setInstOn(c, pkg, uid, v) })
-            shown.add("$pkg@$uid")
+        val shownG = HashSet<String>()
+        for (pkg in Store.APPS.keys) {
+            val g = Store.grp(pkg) ?: continue
+            if (!shownG.add(g)) continue
+            val det = if (g == "WhatsApp") listOf("Business ও ক্লোনসহ") else emptyList()
+            cells.add(swCell(g, det, Store.grpOn(c, g)) { v -> Store.setGrpOn(c, g, v) })
         }
-        for ((pkg, _) in Store.APPS) arow(pkg, 0, null)
+        val shown = HashSet<String>()
         for (i in Store.insts(c)) {
-            if ("${i.pkg}@${i.uid}" in shown) continue
-            arow(i.pkg, i.uid, fmt.format(Date(i.t)))
+            if (Store.grp(i.pkg) != null || "${i.pkg}@${i.uid}" in shown) continue
+            shown.add("${i.pkg}@${i.uid}")
+            val det = arrayListOf(i.pkg)
+            if (i.uid != 0) det.add("ইউজার ${i.uid}")
+            det.add(fmt.format(Date(i.t)))
+            cells.add(swCell("অচেনা অ্যাপ", det, Store.instOn(c, i.pkg, i.uid)) { v -> Store.setInstOn(c, i.pkg, i.uid, v) })
         }
         grid(apps, cells, 12)
         addSide(apps, 14)

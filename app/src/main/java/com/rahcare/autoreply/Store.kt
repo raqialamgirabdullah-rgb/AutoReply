@@ -50,15 +50,38 @@ object Store {
         return if (parts.isEmpty()) base else "$base (${parts.joinToString(", ")})"
     }
 
-    // চেনা পরিবারের কপি নিজে থেকে চালু; অচেনা অ্যাপ ব্যবহারকারী নিজে টিক না দিলে বন্ধ
-    fun instOn(c: Context, pkg: String, uid: Int): Boolean {
+    // একই সুইচে চলা দল: WhatsApp, WhatsApp Business ও তাদের সব ক্লোন/ডুয়াল কপি একসাথে "WhatsApp"; অচেনা অ্যাপ হলে null
+    fun grp(pkg: String): String? = family(pkg)?.let { if (it == "WhatsApp Business") "WhatsApp" else it }
+
+    // আগের আলাদা আলাদা সেটিং (থাকলে); নতুন দলের সুইচ প্রথমবার আগের পছন্দ থেকে শুরু হয়
+    private fun oldOn(c: Context, pkg: String, uid: Int): Boolean? {
         val sp = p(c)
         val k = "inst_$pkg@$uid"
         if (sp.contains(k)) return sp.getBoolean(k, false)
         if (uid == 0 && sp.contains("app_$pkg")) return sp.getBoolean("app_$pkg", true)
-        return family(pkg) != null
+        return null
     }
-    fun setInstOn(c: Context, pkg: String, uid: Int, v: Boolean) = p(c).edit().putBoolean("inst_$pkg@$uid", v).apply()
+
+    // দলের সুইচ: সেভ করা থাকলে সেটাই; না থাকলে আগের সেটিংয়ের কোনোটা চালু থাকলে চালু, সবই বন্ধ থাকলে বন্ধ, কিছু না থাকলে চালু
+    fun grpOn(c: Context, g: String): Boolean {
+        val sp = p(c)
+        if (sp.contains("grp_$g")) return sp.getBoolean("grp_$g", true)
+        val old = ArrayList<Boolean>()
+        for (pkg in APPS.keys) if (grp(pkg) == g) oldOn(c, pkg, 0)?.let { old.add(it) }
+        for (i in insts(c)) if (grp(i.pkg) == g) oldOn(c, i.pkg, i.uid)?.let { old.add(it) }
+        return old.isEmpty() || old.any { it }
+    }
+    fun setGrpOn(c: Context, g: String, v: Boolean) = p(c).edit().putBoolean("grp_$g", v).apply()
+
+    // চেনা অ্যাপ দলের সুইচ অনুযায়ী; অচেনা অ্যাপ ব্যবহারকারী নিজে টিক না দিলে বন্ধ
+    fun instOn(c: Context, pkg: String, uid: Int): Boolean {
+        grp(pkg)?.let { return grpOn(c, it) }
+        return p(c).getBoolean("inst_$pkg@$uid", false)
+    }
+    fun setInstOn(c: Context, pkg: String, uid: Int, v: Boolean) {
+        val g = grp(pkg)
+        if (g != null) setGrpOn(c, g, v) else p(c).edit().putBoolean("inst_$pkg@$uid", v).apply()
+    }
 
     // যেসব কপি থেকে নোটিফিকেশন এসেছে তার তালিকা (সর্বশেষ ২০টা), মূল পাতায় দেখানোর জন্য
     class Inst(val pkg: String, val uid: Int, var t: Long)
