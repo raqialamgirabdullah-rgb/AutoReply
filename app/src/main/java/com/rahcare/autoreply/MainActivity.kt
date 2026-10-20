@@ -141,7 +141,7 @@ class MainActivity : Activity() {
         })
         // নিচে মাঝখানে ভাসমান আপডেট বোতাম, + বোতামের সমান লাইনে
         updBtn = TextView(this).apply {
-            text = "↓  আপডেট করুন"
+            text = "আপডেট করুন"
             textSize = 15f
             includeFontPadding = false
             setTextColor(Color.parseColor("#06201C"))
