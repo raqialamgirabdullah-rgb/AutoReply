@@ -241,6 +241,14 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        Store.sp(this).edit().putBoolean("ui_open", true).apply()
+        // আপডেটের পর অ্যাপ নিজে থেকে আবার চালু হলে বা নোটিফিকেশনে চেপে ঢুকলে একবার জানায়
+        val uv = Store.sp(this).getInt("just_upd", 0)
+        if (uv != 0) {
+            Store.sp(this).edit().putInt("just_upd", 0).apply()
+            Updater.clearUpdated(this)
+            Toast.makeText(this, "আপডেট হয়ে গেছে (সংস্করণ $uv)", Toast.LENGTH_LONG).show()
+        }
         var waitPerm = false
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
@@ -270,6 +278,7 @@ class MainActivity : Activity() {
 
     override fun onPause() {
         super.onPause()
+        Store.sp(this).edit().putBoolean("ui_open", false).apply()
         handler.removeCallbacks(ticker)
     }
 
