@@ -684,7 +684,7 @@ class MainActivity : Activity() {
         val rules = Store.rules(c)
         val rc = section()
         title(rc, "উত্তরের নিয়ম")
-        bullets(rc, listOf("মেসেজে শব্দগুলোর একটা থাকলেই উত্তর যায়", "ওপরের নিয়ম আগে মেলে", "গ্রুপ চ্যাটে উত্তর যায় না"), 6)
+        bullets(rc, listOf("গ্রুপ চ্যাটে উত্তর যায় না"), 6)
         for (r in rules) {
             val rb = LinearLayout(this)
             rb.orientation = LinearLayout.VERTICAL
