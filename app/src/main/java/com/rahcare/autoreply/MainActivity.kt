@@ -58,6 +58,9 @@ class MainActivity : Activity() {
     private var wantInstall = false             // আপডেট-নোটিফিকেশনে চেপে ঢুকলে সরাসরি ইনস্টল শুরু হবে
     private var statusTv: TextView? = null
     private var lastCheck = 0L
+    private var updBusy = false                    // আপডেট ডাউনলোড/ইনস্টল চলছে
+    private var updStage = 0                       // ০ বসে আছে, ১ ডাউনলোড, ২ ইনস্টল নিশ্চিতকরণের অপেক্ষা
+    private var updPct = -1                        // ডাউনলোডের শতাংশ (-১ মানে অজানা)
     private lateinit var updBtn: TextView        // নিচে মাঝখানে ভাসমান আপডেট বোতাম (আপডেট থাকলেই দেখায়)
 
     private val ink = Color.parseColor("#EAF2F3")
@@ -93,7 +96,7 @@ class MainActivity : Activity() {
 
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(d(16), d(12), d(16), d(100))
+            setPadding(d(16), d(8), d(16), d(100))
         }
         val sv = ScrollView(this).apply { addView(root) }
 
@@ -141,7 +144,26 @@ class MainActivity : Activity() {
             bottomMargin = d(24)
         })
         // নিচে মাঝখানে ভাসমান আপডেট বোতাম, + বোতামের সমান লাইনে
-        updBtn = TextView(this).apply {
+        updBtn = object : TextView(this) {
+            private val fp = Paint(Paint.ANTI_ALIAS_FLAG)
+            override fun onDraw(c: Canvas) {
+                if (updBusy) {
+                    val w = width.toFloat()
+                    val h = height.toFloat()
+                    val r = h / 2
+                    fp.color = Color.parseColor("#134A44") // খালি অংশ
+                    c.drawRoundRect(0f, 0f, w, h, r, r, fp)
+                    if (updPct >= 0) {
+                        fp.color = accent                    // ভরা অংশ
+                        c.save()
+                        c.clipRect(0f, 0f, w * updPct / 100f, h)
+                        c.drawRoundRect(0f, 0f, w, h, r, r, fp)
+                        c.restore()
+                    }
+                }
+                super.onDraw(c)
+            }
+        }.apply {
             text = "আপডেট করুন"
             textSize = 15f
             includeFontPadding = false
@@ -242,6 +264,7 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        if (updStage == 2) resetUpd() // ইনস্টল নিশ্চিতকরণের পর্দা থেকে ফিরলে (বাতিল করলে) বোতাম আগের অবস্থায়
         // App info থেকে ফিরলে (ব্যবহারকারীর নিজের চাপের পরে) একবার সংশ্লিষ্ট সেটিংস পাতা আবার খুলে দেয়
         val pend = Store.sp(this).getString("info_for", "") ?: ""
         if (pend.isNotEmpty()) {
@@ -293,6 +316,34 @@ class MainActivity : Activity() {
         }.start()
     }
 
+    private fun startUpd() {
+        updBusy = true
+        updStage = 1
+        updPct = 0
+        updBtn.minWidth = d(250)
+        updBtn.setTextColor(Color.WHITE)
+        updBtn.setShadowLayer(d(3).toFloat(), 0f, 0f, Color.parseColor("#CC000000"))
+        updBtn.text = "ডাউনলোড হচ্ছে… 0%"
+        updBtn.invalidate()
+    }
+
+    private fun setUpd(pct: Int, label: String) {
+        updPct = pct
+        updBtn.text = label
+        updBtn.invalidate()
+    }
+
+    private fun resetUpd() {
+        updBusy = false
+        updStage = 0
+        updPct = -1
+        updBtn.minWidth = 0
+        updBtn.setTextColor(Color.parseColor("#06201C"))
+        updBtn.setShadowLayer(0f, 0f, 0f, 0)
+        updBtn.text = if (packageManager.canRequestPackageInstalls()) "আপডেট করুন" else "আপডেটের অনুমতি দিন"
+        updBtn.invalidate()
+    }
+
     // APK নামিয়ে PackageInstaller দিয়ে ইনস্টল করে; ফোন নিশ্চিত করার পর্দা দেখাবে
     private fun install(url: String) {
         if (!packageManager.canRequestPackageInstalls()) {
@@ -302,7 +353,8 @@ class MainActivity : Activity() {
             startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName")))
             return
         }
-        Toast.makeText(this, "ডাউনলোড হচ্ছে… শেষ হলে ফোন নিশ্চিত করতে বলবে", Toast.LENGTH_LONG).show()
+        if (updBusy) return
+        startUpd() // আলাদা লেখা নয়: আপডেট বোতামটাই প্রগ্রেস বার হয়ে যায়
         Thread {
             val inst = packageManager.packageInstaller
             val p = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)
@@ -314,9 +366,25 @@ class MainActivity : Activity() {
                 cn.connectTimeout = 15000
                 cn.readTimeout = 30000
                 if (cn.responseCode != 200) throw Exception("HTTP ${cn.responseCode}")
+                val total = cn.contentLengthLong
                 cn.inputStream.use { ins ->
                     s.openWrite("a", 0, -1).use { out ->
-                        ins.copyTo(out)
+                        val buf = ByteArray(32 * 1024)
+                        var done = 0L
+                        var last = -1
+                        while (true) {
+                            val n = ins.read(buf)
+                            if (n < 0) break
+                            out.write(buf, 0, n)
+                            done += n
+                            if (total > 0) {
+                                val pct = (done * 100 / total).toInt().coerceIn(0, 100)
+                                if (pct != last) {
+                                    last = pct
+                                    runOnUiThread { setUpd(pct, "ডাউনলোড হচ্ছে… $pct%") }
+                                }
+                            }
+                        }
                         s.fsync(out)
                     }
                 }
@@ -324,10 +392,15 @@ class MainActivity : Activity() {
                     this, id, Intent(this, UpdateReceiver::class.java),
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
                 )
+                runOnUiThread {
+                    updStage = 2
+                    setUpd(100, "ইনস্টল হচ্ছে…")
+                    handler.postDelayed({ if (updStage == 2) resetUpd() }, 60000L)
+                }
                 s.commit(pi.intentSender)
             } catch (e: Exception) {
                 try { inst.abandonSession(id) } catch (x: Exception) {}
-                runOnUiThread { Toast.makeText(this, "ডাউনলোড বা ইনস্টল শুরু করা গেল না (${e.javaClass.simpleName}: ${e.message?.take(70)}) — নিচের ব্রাউজার বোতামটা ব্যবহার করুন", Toast.LENGTH_LONG).show() }
+                runOnUiThread { resetUpd(); Toast.makeText(this, "ডাউনলোড বা ইনস্টল শুরু করা গেল না (${e.javaClass.simpleName}: ${e.message?.take(70)}) — নিচের ব্রাউজার বোতামটা ব্যবহার করুন", Toast.LENGTH_LONG).show() }
             }
         }.start()
     }
@@ -445,7 +518,7 @@ class MainActivity : Activity() {
             }
         }
 
-        override fun onMeasure(w: Int, h: Int) = setMeasuredDimension(d(52), d(32))
+        override fun onMeasure(w: Int, h: Int) = setMeasuredDimension(d(42), d(26))
 
         override fun onDraw(c: Canvas) {
             val w = width.toFloat()
@@ -692,14 +765,14 @@ class MainActivity : Activity() {
                 Store.saveRules(c, rules)
                 top.background = rounded(panel, 14, if (v) accent else line)
             })
-            addTo(rc, top, 10)
+            addTo(rc, top, if (r === rules.first()) 0 else 10)
         }
-        add(rc, 12)
+        add(rc, 0)
 
         // নতুন সংস্করণ এলে শুধু তখনই নিচে মাঝখানে "আপডেট করুন" বোতাম দেখায় (কোনো কার্ড নয়)
         if (up != null) {
-            updBtn.text = if (packageManager.canRequestPackageInstalls()) "আপডেট করুন" else "আপডেটের অনুমতি দিন"
-            updBtn.setOnClickListener { install(up.url) }
+            if (!updBusy) updBtn.text = if (packageManager.canRequestPackageInstalls()) "আপডেট করুন" else "আপডেটের অনুমতি দিন"
+            updBtn.setOnClickListener { if (!updBusy) install(up.url) }
             updBtn.visibility = View.VISIBLE
         } else {
             updBtn.visibility = View.GONE

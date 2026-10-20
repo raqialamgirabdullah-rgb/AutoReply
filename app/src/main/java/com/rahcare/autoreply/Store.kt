@@ -186,6 +186,15 @@ object Store {
         // আগের ডিফল্ট নিয়ম (কেউ বদলায়নি) থাকলে নতুন ডিফল্টে হালনাগাদ হয়; বদলানো নিয়ম ছোঁয়া হয় না
         val i = l.indexOfFirst { (it.keys == "সালাম, salam" && it.reply == "ওয়ালাইকুম আসসালাম") || (it.keys == "আসসালামু আলাইকুম, আসসালামুয়ালাইকুম, সালাম, Assalamu Alaikum, Assalamualaikum, salam, Hi, Hello" && it.reply == "ওয়া আলাইকুম আসসালাম") }
         if (i >= 0) { val o = l[i]; l[i] = defaultSalam().also { it.on = o.on; it.group = o.group; it.person = o.person } }
+        // একবারের হালনাগাদ: Receive শুধু "আসসালামু আলাইকুম" থাকা নিয়মে সালাম/শুভেচ্ছার নানা রূপ যোগ হয়; Send-এর উত্তর ছোঁয়া হয় না
+        if (!p(c).getBoolean("m_salam_v4", false)) {
+            p(c).edit().putBoolean("m_salam_v4", true).apply()
+            val j = l.indexOfFirst { it.keys.trim() == "আসসালামু আলাইকুম" }
+            if (j >= 0) {
+                l[j].keys = defaultSalam().keys
+                saveRules(c, l)
+            }
+        }
         return l
     }
 
