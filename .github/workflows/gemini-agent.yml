@@ -126,11 +126,14 @@ jobs:
           PRS=$(gh pr list --head "gemini/issue-$ISSUE_NUMBER" --state open --json number --jq length 2>/dev/null || echo 0)
           if [ "$OUTCOME" = "success" ] && [ "${PRS:-0}" -gt 0 ]; then echo "nopr=false" >> "$GITHUB_OUTPUT"; exit 0; fi
           echo "nopr=true" >> "$GITHUB_OUTPUT"
+          READABLE=$(printf '%s' "$KEY_MODELS" | sed -e 's/=200/=ঠিক/g' -e 's/=429/=কোটা শেষ/g' -e 's/=404/=নেই/g' -e 's/=503/=ব্যস্ত/g' -e 's/=0000*/=সাড়া নেই/g')
           {
-            echo "Gemini রান: **$OUTCOME**$( [ "${PRS:-0}" -eq 0 ] && echo ' — কিন্তু কোনো পুল রিকোয়েস্ট খোলা হয়নি' )"
-            echo "ব্যবহৃত মডেল: ${KEY_MODEL:-কোনোটিই কাজ করেনি}; মডেল পরীক্ষা: ${KEY_MODELS:-?}"
+            if [ "${PRS:-0}" -eq 0 ]; then echo "⚠ কাজ হয়নি — Gemini কোনো বদল (Pull Request) করেনি।"; else echo "Gemini রান: **$OUTCOME**"; fi
+            echo "ব্যবহৃত মডেল: ${KEY_MODEL:-কোনোটিই কাজ করেনি}"
+            echo "মডেলের অবস্থা: ${READABLE:-?}"
+            case "$KEY_MODELS" in *gemini-4-argon=429*|*gemini-3.1-pro-preview=429*) echo "শক্তিশালী মডেলের কোটা শেষ, তাই হালকা মডেল ব্যবহার হয়েছে — জটিল কাজ ঠিকমতো না-ও হতে পারে।" ;; esac
             if [ -n "$G_ERROR" ]; then echo; echo "ত্রুটি:"; echo '```'; printf '%s' "$G_ERROR" | grep -v 'at ' | tail -c 1500; echo; echo '```'; fi
-            if [ -n "$G_SUMMARY" ]; then echo; echo "আউটপুট:"; echo '```'; printf '%s' "$G_SUMMARY" | head -c 1200; echo; echo '```'; fi
+            case "$G_SUMMARY" in "{"*|"") ;; *) echo; echo "আউটপুট:"; echo '```'; printf '%s' "$G_SUMMARY" | head -c 800; echo; echo '```' ;; esac
             echo; echo "[রানের লিংক]($RUN_URL)"
           } > /tmp/report.md
           python3 - >> /tmp/report.md <<'PY'
