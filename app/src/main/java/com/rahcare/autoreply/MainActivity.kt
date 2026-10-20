@@ -694,8 +694,13 @@ class MainActivity : Activity() {
         ) {
             if (tried) {
                 Store.sp(this).edit().putString("info_for", key).apply()
-                Toast.makeText(this, "ওপরে ডানে ⋮ চেপে \"Allow restricted settings\" দিন, তারপর ফিরে আসুন", Toast.LENGTH_LONG).show()
-                startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
+                // App info সরাসরি খুললে অনেক ফোনে ⋮ মেনু আসে না; ফোনের নিজের অ্যাপ তালিকা থেকে খুললে আসে — তাই তালিকা খোলা হয়
+                Toast.makeText(this, "তালিকায় \"Auto Reply\" খুঁজে চাপুন, ওপরে ডানে ⋮ চেপে \"Allow restricted settings\" দিন, তারপর ফিরে আসুন", Toast.LENGTH_LONG).show()
+                try {
+                    startActivity(Intent(Settings.ACTION_MANAGE_ALL_APPLICATIONS_SETTINGS))
+                } catch (e: Exception) {
+                    startActivity(Intent(Settings.ACTION_MANAGE_APPLICATIONS_SETTINGS))
+                }
             } else {
                 Store.sp(this).edit().putBoolean("try_$key", true).apply()
                 startActivity(Intent(settings))
