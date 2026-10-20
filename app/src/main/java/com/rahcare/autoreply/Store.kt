@@ -4,7 +4,7 @@ import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
 
-class Rule(var keys: String, var reply: String, var on: Boolean = true, var group: Boolean = false, var person: Boolean = true)
+class Rule(var keys: String, var reply: String, var on: Boolean = true, var group: Boolean = false)
 
 object Store {
     // নতুন অ্যাপ যোগ করতে এই তালিকায় একটা লাইন বাড়ালেই হবে (প্যাকেজ নাম to দেখানোর নাম)
@@ -161,13 +161,13 @@ object Store {
         val a = JSONArray(s)
         return MutableList(a.length()) {
             val o = a.getJSONObject(it)
-            Rule(o.getString("k"), o.getString("r"), o.optBoolean("on", true), o.optBoolean("g", false), o.optBoolean("p", true))
+            Rule(o.getString("k"), o.getString("r"), o.optBoolean("on", true), o.optBoolean("g", false))
         }
     }
 
     fun saveRules(c: Context, l: List<Rule>) {
         val a = JSONArray()
-        l.forEach { a.put(JSONObject().put("k", it.keys).put("r", it.reply).put("on", it.on).put("g", it.group).put("p", it.person)) }
+        l.forEach { a.put(JSONObject().put("k", it.keys).put("r", it.reply).put("on", it.on).put("g", it.group)) }
         p(c).edit().putString("rules", a.toString()).apply()
     }
 
@@ -177,9 +177,7 @@ object Store {
         val t = text.lowercase()
         for (r in rules(c)) {
             if (!r.on) continue
-            // গ্রুপের মেসেজে শুধু "গ্রুপ" চালু নিয়ম, সরাসরি (ব্যক্তির) চ্যাটে শুধু "ব্যক্তি" চালু নিয়ম
             if (group && !r.group) continue
-            if (!group && !r.person) continue
             val hit = r.keys.split(',', '،', '\n').map { it.trim().lowercase() }.filter { it.isNotEmpty() }.any { t.contains(it) }
             if (hit) return r.reply
         }

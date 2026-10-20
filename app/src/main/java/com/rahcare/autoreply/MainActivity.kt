@@ -713,6 +713,17 @@ class MainActivity : Activity() {
             rb.addView(top)
             val acts = LinearLayout(this)
             acts.orientation = LinearLayout.HORIZONTAL
+            acts.gravity = Gravity.CENTER_VERTICAL
+            // কার্ডের বাঁ দিকে "গ্রুপ" সুইচ: চালু থাকলে এই নিয়ম গ্রুপ চ্যাটের মেসেজেও উত্তর দেবে
+            val gp = LinearLayout(this)
+            gp.orientation = LinearLayout.HORIZONTAL
+            gp.gravity = Gravity.CENTER_VERTICAL
+            gp.addView(tv("গ্রুপ", 13f, mute, true), LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { rightMargin = d(6) })
+            gp.addView(sw(r.group) { v ->
+                r.group = v
+                Store.saveRules(c, rules)
+            })
+            acts.addView(gp, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { rightMargin = d(10) })
             acts.addView(ghost("সম্পাদনা") { edit(r, rules) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { rightMargin = d(8) })
             acts.addView(ghost("মুছুন", warn) {
                 rules.remove(r)
@@ -1044,57 +1055,22 @@ class MainActivity : Activity() {
         box.setPadding(d(20), d(8), d(20), 0)
         box.addView(k)
         box.addView(rp)
-        // নিচের সারি: বাঁয়ে "গ্রুপ" ও "ব্যক্তি" সুইচ, ডানে বাতিল ও সংরক্ষণ
-        fun cell(label: String, on: Boolean): Pair<LinearLayout, BooleanArray> {
-            val l = LinearLayout(this)
-            l.orientation = LinearLayout.VERTICAL
-            l.gravity = Gravity.CENTER_HORIZONTAL
-            l.addView(tv(label, 12f, mute, true))
-            val st = booleanArrayOf(on)
-            l.addView(sw(on) { st[0] = it })
-            return Pair(l, st)
-        }
-        val gCell = cell("গ্রুপ", r?.group ?: false)
-        val pCell = cell("ব্যক্তি", r?.person ?: true)
-        val foot = LinearLayout(this)
-        foot.orientation = LinearLayout.HORIZONTAL
-        foot.gravity = Gravity.CENTER_VERTICAL
-        foot.addView(gCell.first, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { rightMargin = d(14) })
-        foot.addView(pCell.first)
-        foot.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
-        val cancel = tv("বাতিল", 15f, accent, true)
-        cancel.setPadding(d(10), d(10), d(10), d(10))
-        val save = tv("সংরক্ষণ", 15f, accent, true)
-        save.setPadding(d(10), d(10), d(4), d(10))
-        foot.addView(cancel)
-        foot.addView(save)
-        addTo(box, foot, 14)
-
-        val dlg = AlertDialog.Builder(this)
+        AlertDialog.Builder(this)
             .setTitle(if (r == null) "নতুন নিয়ম" else "নিয়ম সম্পাদনা")
             .setView(box)
-            .create()
-        cancel.setOnClickListener { dlg.dismiss() }
-        save.setOnClickListener {
-            val ks = k.text.toString().trim()
-            val rs = rp.text.toString().trim()
-            val g = gCell.second[0]
-            val p = pCell.second[0]
-            if (ks.isEmpty() || rs.isEmpty()) return@setOnClickListener
-            if (!g && !p) {
-                Toast.makeText(this, "\"গ্রুপ\" বা \"ব্যক্তি\"-র অন্তত একটা চালু রাখুন", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
+            .setPositiveButton("সংরক্ষণ") { _, _ ->
+                val ks = k.text.toString().trim()
+                val rs = rp.text.toString().trim()
+                if (ks.isNotEmpty() && rs.isNotEmpty()) {
+                    if (r == null) rules.add(Rule(ks, rs)) else {
+                        r.keys = ks
+                        r.reply = rs
+                    }
+                    Store.saveRules(this, rules)
+                    build()
+                }
             }
-            if (r == null) rules.add(Rule(ks, rs, true, g, p)) else {
-                r.keys = ks
-                r.reply = rs
-                r.group = g
-                r.person = p
-            }
-            Store.saveRules(this, rules)
-            dlg.dismiss()
-            build()
-        }
-        dlg.show()
+            .setNegativeButton("বাতিল", null)
+            .show()
     }
 }
