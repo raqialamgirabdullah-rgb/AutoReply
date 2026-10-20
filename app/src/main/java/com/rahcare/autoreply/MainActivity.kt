@@ -704,7 +704,12 @@ class MainActivity : Activity() {
             val perm = card(warn)
             title(perm, "অনুমতি বাকি আছে")
             grid(perm, missing, 12)
-            if (!ok) bullets(perm, listOf("অপশনটা ধূসর থাকলে ফোনের Settings → Apps → এই অ্যাপ খুলুন", "ওপরে ডানে ⋮ চেপে \"Allow restricted settings\" দিন", "তারপর আবার চেষ্টা করুন"), 10)
+            if (!ok || !a11yOn()) {
+                bullets(perm, listOf("অপশনটা ধূসর থাকলে নিচের \"App info খুলুন\" চাপুন", "খোলা পাতায় ওপরে ডানে ⋮ চেপে \"Allow restricted settings\" দিন", "তারপর ফিরে এসে আবার চেষ্টা করুন"), 10)
+                addTo(perm, ghost("App info খুলুন", accent) {
+                    startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
+                }, 10)
+            }
             addSide(perm, 16)
         }
 
