@@ -63,6 +63,8 @@ class MainActivity : Activity() {
     private var updPct = -1                        // ডাউনলোডের শতাংশ (-১ মানে অজানা)
     private lateinit var editPage: FrameLayout     // রুল এডিটর: আলাদা পুরো পাতা
     private var editDirty: (() -> Boolean)? = null
+    private lateinit var fabV: FabView            // নিচে ডানের গোল বোতাম: + (নতুন নিয়ম) ⇄ ✔ (এডিটরে সংরক্ষণ)
+    private var editSave: (() -> Unit)? = null    // এডিটর খোলা থাকলে ✔ চাপলে যা চলবে
     private var editPrevMode = 0
     private lateinit var updBtn: TextView        // নিচে মাঝখানে ভাসমান আপডেট বোতাম (আপডেট থাকলেই দেখায়)
 
@@ -129,23 +131,15 @@ class MainActivity : Activity() {
         }
         val frame = FrameLayout(this)
         frame.addView(col, FrameLayout.LayoutParams(mp, mp))
-        // নিচে ডানে ভাসমান + বোতাম: নতুন নিয়ম
-        val fab = TextView(this).apply {
-            text = "+"
-            textSize = 32f
-            includeFontPadding = false
-            setTextColor(Color.parseColor("#06201C"))
-            setTypeface(typeface, Typeface.BOLD)
-            gravity = Gravity.CENTER
+        // নিচে ডানে ভাসমান বোতাম: সাধারণত + (নতুন নিয়ম); এডিটর খুললে অ্যানিমেশনে ✔ (সংরক্ষণ) হয়ে যায়
+        fabV = FabView(this).apply {
             background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(accent) }
             elevation = d(6).toFloat()
             contentDescription = "নতুন নিয়ম"
-            setOnClickListener { edit(null, Store.rules(this@MainActivity)) }
+            setOnClickListener {
+                if (editPage.visibility == View.VISIBLE) editSave?.invoke() else edit(null, Store.rules(this@MainActivity))
+            }
         }
-        frame.addView(fab, FrameLayout.LayoutParams(d(58), d(58), Gravity.BOTTOM or Gravity.END).apply {
-            rightMargin = d(20)
-            bottomMargin = d(24)
-        })
         // নিচে মাঝখানে ভাসমান আপডেট বোতাম, + বোতামের সমান লাইনে
         updBtn = object : TextView(this) {
             private val fp = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -181,14 +175,18 @@ class MainActivity : Activity() {
         frame.addView(updBtn, FrameLayout.LayoutParams(wc, d(52), Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply {
             bottomMargin = d(27)
         })
-        frame.addView(scrim, FrameLayout.LayoutParams(mp, mp))
-        frame.addView(sideSv, FrameLayout.LayoutParams(sideW(), mp, Gravity.START))
         editPage = FrameLayout(this).apply {
             setBackgroundColor(Color.parseColor("#0B0F14"))
             visibility = View.GONE
             isClickable = true
         }
-        frame.addView(editPage, FrameLayout.LayoutParams(mp, mp))
+        frame.addView(editPage, FrameLayout.LayoutParams(mp, mp))   // এডিটর পাতা আপডেট বোতামকে ঢেকে রাখে
+        frame.addView(fabV, FrameLayout.LayoutParams(d(58), d(58), Gravity.BOTTOM or Gravity.END).apply {
+            rightMargin = d(20)
+            bottomMargin = d(24)
+        })                                                           // + / ✔ বোতাম এডিটর পাতার ওপরেই থাকে
+        frame.addView(scrim, FrameLayout.LayoutParams(mp, mp))
+        frame.addView(sideSv, FrameLayout.LayoutParams(sideW(), mp, Gravity.START))
         setContentView(frame)
     }
 
@@ -782,7 +780,7 @@ class MainActivity : Activity() {
         if (up != null) {
             if (!updBusy) updBtn.text = if (packageManager.canRequestPackageInstalls()) "Update" else "Allow update"
             updBtn.setOnClickListener { if (!updBusy) install(up.url) }
-            updBtn.visibility = View.VISIBLE
+            updBtn.visibility = if (editPage.visibility == View.VISIBLE) View.GONE else View.VISIBLE
         } else {
             updBtn.visibility = View.GONE
         }
@@ -1251,29 +1249,17 @@ class MainActivity : Activity() {
         col.addView(sv, LinearLayout.LayoutParams(mp, 0, 1f))
         editPage.addView(col, FrameLayout.LayoutParams(mp, mp))
 
-        // নিচে ডানে ✔ বোতাম: সংরক্ষণ
-        val save = FrameLayout(this)
-        save.background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(accent) }
-        save.elevation = d(8).toFloat()
-        save.addView(icon(58) { c, w, h, p ->
-            p.color = Color.parseColor("#06201C")
-            p.strokeWidth = d(3).toFloat() + 1f
-            val path = Path()
-            path.moveTo(w * 0.28f, h * 0.52f)
-            path.lineTo(w * 0.44f, h * 0.68f)
-            path.lineTo(w * 0.74f, h * 0.34f)
-            c.drawPath(path, p)
-        })
-        save.setOnClickListener {
+        // সংরক্ষণ: নিচে ডানের মূল বোতাম (এডিটর খুললে যেটা ✔ হয়ে যায়) চাপলে এটা চলে
+        editSave = save@{
             val ks = k.text.toString().trim()
             val rs = rp.text.toString().trim()
             if (ks.isEmpty() || rs.isEmpty()) {
                 Toast.makeText(this, "Fill in both the received message and the reply", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
+                return@save
             }
             if (!st[0] && !st[1]) {
                 Toast.makeText(this, "Turn on People or Groups (at least one)", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
+                return@save
             }
             if (r == null) rules.add(Rule(ks, rs, true, st[1], st[0])) else {
                 r.keys = ks
@@ -1284,14 +1270,12 @@ class MainActivity : Activity() {
             Store.saveRules(this, rules)
             closeEditor(true)
         }
-        editPage.addView(save, FrameLayout.LayoutParams(d(58), d(58), Gravity.BOTTOM or Gravity.END).apply {
-            rightMargin = d(20)
-            bottomMargin = d(24)
-        })
 
         editPrevMode = window.attributes.softInputMode
         window.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
         editPage.visibility = View.VISIBLE
+        updBtn.visibility = View.GONE
+        fabV.morph(true)   // + → ✔
     }
 
     // এডিটর বন্ধ: বদল থাকলে (এবং force না হলে) আগে জিজ্ঞেস করে
@@ -1310,7 +1294,47 @@ class MainActivity : Activity() {
         editPage.visibility = View.GONE
         editPage.removeAllViews()
         editDirty = null
+        editSave = null
+        fabV.morph(false)  // ✔ → +
         window.setSoftInputMode(editPrevMode)
         build()
+    }
+}
+
+/** + ও ✔ একই দুটি দাগের রূপান্তর: প্রগতি p = 0 হলে +, p = 1 হলে ✔ (অ্যানিমেশনে বদলায়) */
+class FabView(ctx: android.content.Context) : View(ctx) {
+    private val pt = Paint(Paint.ANTI_ALIAS_FLAG)
+    private var p = 0f
+    private var anim: android.animation.ValueAnimator? = null
+
+    init {
+        pt.color = Color.parseColor("#06201C")
+        pt.style = Paint.Style.STROKE
+        pt.strokeCap = Paint.Cap.ROUND
+    }
+
+    fun morph(toCheck: Boolean) {
+        anim?.cancel()
+        val a = android.animation.ValueAnimator.ofFloat(p, if (toCheck) 1f else 0f)
+        a.duration = 240
+        a.interpolator = android.view.animation.AccelerateDecelerateInterpolator()
+        a.addUpdateListener {
+            p = it.animatedValue as Float
+            invalidate()
+        }
+        a.start()
+        anim = a
+        contentDescription = if (toCheck) "সংরক্ষণ" else "নতুন নিয়ম"
+    }
+
+    override fun onDraw(c: Canvas) {
+        val w = width.toFloat()
+        val h = height.toFloat()
+        pt.strokeWidth = w * 0.075f
+        fun m(a: Float, b: Float) = a + (b - a) * p
+        // অনুভূমিক দাগ → ✔-এর ছোট টান
+        c.drawLine(w * m(0.28f, 0.28f), h * m(0.5f, 0.52f), w * m(0.72f, 0.44f), h * m(0.5f, 0.68f), pt)
+        // খাড়া দাগ → ✔-এর লম্বা টান
+        c.drawLine(w * m(0.5f, 0.74f), h * m(0.28f, 0.34f), w * m(0.5f, 0.44f), h * m(0.72f, 0.68f), pt)
     }
 }
