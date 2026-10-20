@@ -61,6 +61,9 @@ class MainActivity : Activity() {
     private var updBusy = false                    // আপডেট ডাউনলোড/ইনস্টল চলছে
     private var updStage = 0                       // ০ বসে আছে, ১ ডাউনলোড, ২ ইনস্টল নিশ্চিতকরণের অপেক্ষা
     private var updPct = -1                        // ডাউনলোডের শতাংশ (-১ মানে অজানা)
+    private lateinit var editPage: FrameLayout     // রুল এডিটর: আলাদা পুরো পাতা
+    private var editDirty: (() -> Boolean)? = null
+    private var editPrevMode = 0
     private lateinit var updBtn: TextView        // নিচে মাঝখানে ভাসমান আপডেট বোতাম (আপডেট থাকলেই দেখায়)
 
     private val ink = Color.parseColor("#EAF2F3")
@@ -164,7 +167,7 @@ class MainActivity : Activity() {
                 super.onDraw(c)
             }
         }.apply {
-            text = "আপডেট করুন"
+            text = "Update"
             textSize = 15f
             includeFontPadding = false
             setTextColor(Color.parseColor("#06201C"))
@@ -180,6 +183,12 @@ class MainActivity : Activity() {
         })
         frame.addView(scrim, FrameLayout.LayoutParams(mp, mp))
         frame.addView(sideSv, FrameLayout.LayoutParams(sideW(), mp, Gravity.START))
+        editPage = FrameLayout(this).apply {
+            setBackgroundColor(Color.parseColor("#0B0F14"))
+            visibility = View.GONE
+            isClickable = true
+        }
+        frame.addView(editPage, FrameLayout.LayoutParams(mp, mp))
         setContentView(frame)
     }
 
@@ -253,7 +262,7 @@ class MainActivity : Activity() {
 
     @Suppress("DEPRECATION")
     override fun onBackPressed() {
-        if (menuOpen) closeMenu() else super.onBackPressed()
+        if (editPage.visibility == View.VISIBLE) closeEditor(false) else if (menuOpen) closeMenu() else super.onBackPressed()
     }
 
     override fun onNewIntent(i: Intent?) {
@@ -323,7 +332,7 @@ class MainActivity : Activity() {
         updBtn.minWidth = d(250)
         updBtn.setTextColor(Color.WHITE)
         updBtn.setShadowLayer(d(3).toFloat(), 0f, 0f, Color.parseColor("#CC000000"))
-        updBtn.text = "ডাউনলোড হচ্ছে… 0%"
+        updBtn.text = "Downloading… 0%"
         updBtn.invalidate()
     }
 
@@ -340,7 +349,7 @@ class MainActivity : Activity() {
         updBtn.minWidth = 0
         updBtn.setTextColor(Color.parseColor("#06201C"))
         updBtn.setShadowLayer(0f, 0f, 0f, 0)
-        updBtn.text = if (packageManager.canRequestPackageInstalls()) "আপডেট করুন" else "আপডেটের অনুমতি দিন"
+        updBtn.text = if (packageManager.canRequestPackageInstalls()) "Update" else "Allow update"
         updBtn.invalidate()
     }
 
@@ -381,7 +390,7 @@ class MainActivity : Activity() {
                                 val pct = (done * 100 / total).toInt().coerceIn(0, 100)
                                 if (pct != last) {
                                     last = pct
-                                    runOnUiThread { setUpd(pct, "ডাউনলোড হচ্ছে… $pct%") }
+                                    runOnUiThread { setUpd(pct, "Downloading… $pct%") }
                                 }
                             }
                         }
@@ -394,7 +403,7 @@ class MainActivity : Activity() {
                 )
                 runOnUiThread {
                     updStage = 2
-                    setUpd(100, "ইনস্টল হচ্ছে…")
+                    setUpd(100, "Installing…")
                     handler.postDelayed({ if (updStage == 2) resetUpd() }, 60000L)
                 }
                 s.commit(pi.intentSender)
@@ -771,7 +780,7 @@ class MainActivity : Activity() {
 
         // নতুন সংস্করণ এলে শুধু তখনই নিচে মাঝখানে "আপডেট করুন" বোতাম দেখায় (কোনো কার্ড নয়)
         if (up != null) {
-            if (!updBusy) updBtn.text = if (packageManager.canRequestPackageInstalls()) "আপডেট করুন" else "আপডেটের অনুমতি দিন"
+            if (!updBusy) updBtn.text = if (packageManager.canRequestPackageInstalls()) "Update" else "Allow update"
             updBtn.setOnClickListener { if (!updBusy) install(up.url) }
             updBtn.visibility = View.VISIBLE
         } else {
@@ -1118,80 +1127,190 @@ class MainActivity : Activity() {
         dlg.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
     }
 
-    private fun edit(r: Rule?, rules: MutableList<Rule>) {
-        val k = EditText(this)
-        k.hint = "Receive (কমা দিয়ে আলাদা করুন)"
-        k.setText(r?.keys ?: "")
-        val rp = EditText(this)
-        rp.hint = "Send"
-        rp.setText(r?.reply ?: "")
-        val box = LinearLayout(this)
-        box.orientation = LinearLayout.VERTICAL
-        box.setPadding(d(20), d(8), d(20), 0)
-        box.addView(k)
-        box.addView(rp)
-        // নিচের সারি: বাঁয়ে "গ্রুপ" ও "ব্যক্তি" সুইচ, ডানে বাতিল ও সংরক্ষণ
-        fun cell(label: String, on: Boolean): Pair<LinearLayout, BooleanArray> {
-            val l = LinearLayout(this)
-            l.orientation = LinearLayout.VERTICAL
-            l.gravity = Gravity.CENTER_HORIZONTAL
-            l.addView(tv(label, 12f, mute, true))
-            val st = booleanArrayOf(on)
-            l.addView(sw(on) { st[0] = it })
-            return Pair(l, st)
-        }
-        val gCell = cell("গ্রুপ", r?.group ?: false)
-        val pCell = cell("ব্যক্তি", r?.person ?: true)
-        val foot = LinearLayout(this)
-        foot.orientation = LinearLayout.HORIZONTAL
-        foot.gravity = Gravity.CENTER_VERTICAL
-        foot.addView(gCell.first, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { rightMargin = d(14) })
-        foot.addView(pCell.first)
-        foot.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
-        val cancel = tv("বাতিল", 15f, accent, true)
-        cancel.setPadding(d(10), d(10), d(10), d(10))
-        val save = tv("সংরক্ষণ", 15f, accent, true)
-        save.setPadding(d(10), d(10), d(4), d(10))
-        val dlg = AlertDialog.Builder(this)
-            .setTitle(if (r == null) "নতুন নিয়ম" else "নিয়ম সম্পাদনা")
-            .setView(box)
-            .create()
-        if (r != null) {
-            val del = tv("মুছুন", 15f, warn, true)
-            del.setPadding(d(10), d(10), d(10), d(10))
-            del.setOnClickListener {
-                rules.remove(r)
-                Store.saveRules(this, rules)
-                dlg.dismiss()
-                build()
+    // ছোট আঁকা আইকন (তীর, তিন-ডট, ✔): ফন্টের চিহ্নের ওপর নির্ভর করে না
+    private fun icon(sizeDp: Int, draw: (Canvas, Float, Float, Paint) -> Unit): View {
+        return object : View(this) {
+            private val pt = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.STROKE
+                strokeWidth = d(3).toFloat()
+                strokeCap = Paint.Cap.ROUND
+                strokeJoin = Paint.Join.ROUND
+                color = Color.WHITE
             }
-            foot.addView(del)
+            override fun onMeasure(w: Int, h: Int) = setMeasuredDimension(d(sizeDp), d(sizeDp))
+            override fun onDraw(c: Canvas) = draw(c, width.toFloat(), height.toFloat(), pt)
         }
-        foot.addView(cancel)
-        foot.addView(save)
-        addTo(box, foot, 14)
+    }
 
-        cancel.setOnClickListener { dlg.dismiss() }
+    // রুল এডিটর: আলাদা পুরো পাতা। ওপরে ব্যাক-তীর, "Rule N", তিন-ডট মেনু (মুছুন); কার্ড: Received message, Automatic reply, Reply to; নিচে ডানে ✔ (সংরক্ষণ)
+    private fun edit(r: Rule?, rules: MutableList<Rule>) {
+        val mp = ViewGroup.LayoutParams.MATCH_PARENT
+        val wc = ViewGroup.LayoutParams.WRAP_CONTENT
+        editPage.removeAllViews()
+        val num = if (r == null) rules.size + 1 else rules.indexOf(r) + 1
+
+        fun field(hint: String, text: String): EditText {
+            val e = EditText(this)
+            e.hint = hint
+            e.setText(text)
+            e.setTextColor(ink)
+            e.setHintTextColor(Color.parseColor("#5E6F74"))
+            e.textSize = 17f
+            e.inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
+            e.minLines = 1
+            e.maxLines = 6
+            e.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#6B7B80"))
+            e.setPadding(d(4), d(12), d(4), d(12))
+            return e
+        }
+        // কার্ড: বড় সবুজ শিরোনাম, ছোট লেখা, নিচে সরু সবুজ দাগ, তারপর ভেতরের অংশ
+        fun sect(title: String, sub: String, body: View): LinearLayout {
+            val cd = card()
+            cd.addView(tv(title, 21f, accent))
+            val st = tv(sub, 12f, accent)
+            st.setPadding(0, d(2), 0, d(10))
+            cd.addView(st)
+            val ln = View(this)
+            ln.setBackgroundColor(accent)
+            cd.addView(ln, LinearLayout.LayoutParams(mp, d(2)))
+            addTo(cd, body, 10)
+            return cd
+        }
+
+        val k = field("Type the message (separate variants with commas)", r?.keys ?: "")
+        val rp = field("Type the reply", r?.reply ?: "")
+        val st = booleanArrayOf(r?.person ?: true, r?.group ?: false) // [People, Groups]
+        val who = LinearLayout(this)
+        who.orientation = LinearLayout.VERTICAL
+        who.addView(swRow("People", "Reply in individual chats", st[0]) { st[0] = it })
+        addTo(who, swRow("Groups", "Reply in group chats", st[1]) { st[1] = it }, 14)
+
+        editDirty = {
+            k.text.toString().trim() != (r?.keys ?: "") || rp.text.toString().trim() != (r?.reply ?: "") ||
+                st[0] != (r?.person ?: true) || st[1] != (r?.group ?: false)
+        }
+
+        // ওপরের বার
+        val bar = LinearLayout(this)
+        bar.orientation = LinearLayout.HORIZONTAL
+        bar.gravity = Gravity.CENTER_VERTICAL
+        bar.setBackgroundColor(Color.parseColor("#0E3A36"))
+        bar.setPadding(d(6), d(26), d(6), d(8))
+        bar.elevation = d(4).toFloat()
+        val back = icon(48) { c, w, h, p ->
+            val path = Path()
+            path.moveTo(w * 0.58f, h * 0.28f)
+            path.lineTo(w * 0.36f, h * 0.5f)
+            path.lineTo(w * 0.58f, h * 0.72f)
+            c.drawPath(path, p)
+            c.drawLine(w * 0.36f, h * 0.5f, w * 0.7f, h * 0.5f, p)
+        }
+        back.setOnClickListener { closeEditor(false) }
+        bar.addView(back)
+        val ttl = tv(if (r == null) "New rule" else if (num > 0) "Rule $num" else "Rule", 20f, Color.WHITE, true)
+        ttl.setPadding(d(8), 0, 0, 0)
+        bar.addView(ttl, LinearLayout.LayoutParams(0, wc, 1f))
+        if (r != null) {
+            val more = icon(48) { c, w, h, p ->
+                p.style = Paint.Style.FILL
+                for (f in floatArrayOf(0.3f, 0.5f, 0.7f)) c.drawCircle(w * 0.5f, h * f, d(2).toFloat() + 0.5f, p)
+                p.style = Paint.Style.STROKE
+            }
+            more.setOnClickListener {
+                val pm = android.widget.PopupMenu(this, more)
+                pm.menu.add("Delete rule")
+                pm.setOnMenuItemClickListener {
+                    AlertDialog.Builder(this)
+                        .setMessage("Delete this rule?")
+                        .setPositiveButton("Delete") { _, _ ->
+                            rules.remove(r)
+                            Store.saveRules(this, rules)
+                            closeEditor(true)
+                        }
+                        .setNegativeButton("Cancel", null)
+                        .show()
+                    true
+                }
+                pm.show()
+            }
+            bar.addView(more)
+        }
+
+        val body = LinearLayout(this)
+        body.orientation = LinearLayout.VERTICAL
+        body.setPadding(d(12), d(12), d(12), d(110))
+        body.addView(sect("Received message", "The incoming message that triggers this reply", k))
+        addTo(body, sect("Automatic reply", "What gets sent back automatically", rp), 12)
+        addTo(body, sect("Reply to", "Where this reply works", who), 12)
+        val sv = ScrollView(this)
+        sv.addView(body)
+
+        val col = LinearLayout(this)
+        col.orientation = LinearLayout.VERTICAL
+        col.addView(bar, LinearLayout.LayoutParams(mp, wc))
+        col.addView(sv, LinearLayout.LayoutParams(mp, 0, 1f))
+        editPage.addView(col, FrameLayout.LayoutParams(mp, mp))
+
+        // নিচে ডানে ✔ বোতাম: সংরক্ষণ
+        val save = FrameLayout(this)
+        save.background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(accent) }
+        save.elevation = d(8).toFloat()
+        save.addView(icon(58) { c, w, h, p ->
+            p.color = Color.parseColor("#06201C")
+            p.strokeWidth = d(3).toFloat() + 1f
+            val path = Path()
+            path.moveTo(w * 0.28f, h * 0.52f)
+            path.lineTo(w * 0.44f, h * 0.68f)
+            path.lineTo(w * 0.74f, h * 0.34f)
+            c.drawPath(path, p)
+        })
         save.setOnClickListener {
             val ks = k.text.toString().trim()
             val rs = rp.text.toString().trim()
-            val g = gCell.second[0]
-            val p = pCell.second[0]
-            if (ks.isEmpty() || rs.isEmpty()) return@setOnClickListener
-            if (!g && !p) {
-                Toast.makeText(this, "\"গ্রুপ\" বা \"ব্যক্তি\"-র অন্তত একটা চালু রাখুন", Toast.LENGTH_SHORT).show()
+            if (ks.isEmpty() || rs.isEmpty()) {
+                Toast.makeText(this, "Fill in both the received message and the reply", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
-            if (r == null) rules.add(Rule(ks, rs, true, g, p)) else {
+            if (!st[0] && !st[1]) {
+                Toast.makeText(this, "Turn on People or Groups (at least one)", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            if (r == null) rules.add(Rule(ks, rs, true, st[1], st[0])) else {
                 r.keys = ks
                 r.reply = rs
-                r.group = g
-                r.person = p
+                r.group = st[1]
+                r.person = st[0]
             }
             Store.saveRules(this, rules)
-            dlg.dismiss()
-            build()
+            closeEditor(true)
         }
-        dlg.show()
+        editPage.addView(save, FrameLayout.LayoutParams(d(58), d(58), Gravity.BOTTOM or Gravity.END).apply {
+            rightMargin = d(20)
+            bottomMargin = d(24)
+        })
+
+        editPrevMode = window.attributes.softInputMode
+        window.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+        editPage.visibility = View.VISIBLE
+    }
+
+    // এডিটর বন্ধ: বদল থাকলে (এবং force না হলে) আগে জিজ্ঞেস করে
+    private fun closeEditor(force: Boolean) {
+        if (!force && editDirty?.invoke() == true) {
+            AlertDialog.Builder(this)
+                .setMessage("Discard your changes?")
+                .setPositiveButton("Discard") { _, _ -> closeEditor(true) }
+                .setNegativeButton("Keep editing", null)
+                .show()
+            return
+        }
+        try {
+            getSystemService(android.view.inputmethod.InputMethodManager::class.java).hideSoftInputFromWindow(editPage.windowToken, 0)
+        } catch (e: Exception) {}
+        editPage.visibility = View.GONE
+        editPage.removeAllViews()
+        editDirty = null
+        window.setSoftInputMode(editPrevMode)
+        build()
     }
 }
