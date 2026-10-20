@@ -98,6 +98,7 @@ object Replier {
         Store.mark(c, hid)
         if (markOnly) return
         if (text in sent) return // এটা আমাদেরই পাঠানো উত্তর
+        if (catchUp && System.currentTimeMillis() - postTime > 2 * 60 * 1000L) Store.missed(c) // মেসেজ ২ মিনিটের বেশি অপেক্ষায় ছিল, মানে আগে উত্তর যায়নি
 
         // আগে নিয়ম; কোনো নিয়ম না মিললে (এবং AI চালু ও সাজানো থাকলে) AI
         val reply = Store.match(c, text, isGroup)

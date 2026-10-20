@@ -263,7 +263,6 @@ class MainActivity : Activity() {
         update = Updater.saved(this)
         if (update == null) Updater.clearNotice(this)
         build()
-        if (Store.testStart(this) != 0L) openMenu() // পরীক্ষা চলছে: ফিরে এলে মেনুতে "ফল দেখুন" বোতাম সামনে আসে
         refreshUpdate()
         handler.removeCallbacks(ticker)
         handler.postDelayed(ticker, 3000)
@@ -577,40 +576,6 @@ class MainActivity : Activity() {
 
     private fun brand() = Build.MANUFACTURER.lowercase()
 
-    // যেসব ফোনে Auto-start সেটিং আলাদা করে লাগে (Samsung/Pixel-এ লাগে না)
-    private fun brandNeedsAuto() = listOf("xiaomi", "redmi", "poco", "oppo", "realme", "oneplus", "vivo", "iqoo", "huawei", "honor", "tecno", "infinix", "itel", "transsion", "asus").any { brand().contains(it) }
-
-    // পরীক্ষার ফল: পরীক্ষা শুরুর পর কী কী ঘটেছে তা সময়ছাপ থেকে দেখে কারণ ধরে
-    private fun runTest() {
-        val c = this
-        val t0 = Store.testStart(c)
-        val replied = Store.stampOf(c, "reply") > t0
-        val seen = maxOf(Store.stampOf(c, "notif"), Store.stampOf(c, "a11y")) > t0
-        val need = HashSet<String>()
-        val res: String
-        if (replied) {
-            res = "✔ সব ঠিক আছে — অ্যাপ বন্ধ থাকলেও মেসেজ ধরা পড়ে উত্তর গেছে"
-        } else if (seen) {
-            res = "✘ মেসেজ ধরা পড়েছে কিন্তু উত্তর যায়নি — \"সর্বশেষ কার্যকলাপ\"-এ কারণ লেখা আছে (নিয়ম না মেলা বা মূল সুইচ বন্ধ থাকা হতে পারে)"
-        } else if (!Store.enabled(c)) {
-            res = "✘ মূল সুইচ বন্ধ ছিল — ওপরের সুইচ চালু করে আবার পরীক্ষা করুন"
-        } else {
-            val why = when {
-                Store.stampOf(c, "proc") > t0 -> "ফোন অ্যাপটা বন্ধ করে দিয়েছিল"
-                Store.stampOf(c, "disc") > t0 -> "নোটিফিকেশনের সংযোগ কেটে গিয়েছিল"
-                else -> "কোনো মেসেজ ধরা পড়েনি"
-            }
-            if (!batteryFree()) need.add("battery")
-            if (brandNeedsAuto() && !Store.flag(c, "s_auto")) need.add("auto")
-            res = if (need.isNotEmpty()) "✘ $why — নিচে এর সমাধানের সেটিং দেখানো হলো; চালু করে আবার পরীক্ষা করুন"
-            else "✘ $why — ফোনের অন্য সেটিং চেষ্টা করুন (যেমন রিসেন্টসে অ্যাপ \"Lock\" করা); \"সমস্যা হচ্ছে?\" চেপে সব অপশন দেখুন"
-        }
-        Store.setNeed(c, need)
-        Store.setTestRes(c, res)
-        Store.setTestStart(c, 0L)
-        build()
-    }
-
     // ফোনের ব্র্যান্ড ধরে সেই ফোনের অটো-স্টার্ট/ব্যাকগ্রাউন্ড সেটিং পেজ সরাসরি খোলে; না পেলে অ্যাপের সেটিংস
     private fun openAutostart() {
         val m = brand()
@@ -770,7 +735,7 @@ class MainActivity : Activity() {
             })
         }
         val canInst = packageManager.canRequestPackageInstalls()
-        dot.visibility = if (missing.isNotEmpty() || !canInst) View.VISIBLE else View.GONE // মেনুর লাল বিন্দু: মূল অনুমতি বাকি বা আপডেট-অনুমতি বন্ধ
+        dot.visibility = if (missing.isNotEmpty() || !canInst || (needSet.isNotEmpty() && extras.isNotEmpty())) View.VISIBLE else View.GONE // মেনুর লাল বিন্দু: মূল অনুমতি বাকি বা আপডেট-অনুমতি বন্ধ
         if (missing.isNotEmpty()) {
             val perm = card(warn)
             title(perm, "অনুমতি বাকি আছে", "প্রথমে এগুলো চালু করুন")
@@ -778,32 +743,11 @@ class MainActivity : Activity() {
             addSide(perm, 16)
         }
 
-        // পরীক্ষা: মূল অনুমতি হয়ে গেলে সত্যিই উত্তর যায় কি না দেখে, না গেলে কারণ ধরে শুধু সেই সেটিং দেখায়
-        if (ok && a11yOn()) {
-            val tc = card()
-            title(tc, "কাজ করছে কি না পরীক্ষা করুন")
-            val t0 = Store.testStart(c)
-            if (t0 == 0L) {
-                val last = Store.testRes(c)
-                if (last.isNotEmpty()) addTo(tc, tv(last, 13f, if (last.startsWith("✔")) accent else warn), 8)
-                addTo(tc, primary("পরীক্ষা শুরু করুন") {
-                    Store.setTestStart(c, System.currentTimeMillis())
-                    Store.setTestRes(c, "")
-                    Store.setNeed(c, emptySet())
-                    build()
-                }, 10)
-            } else {
-                bullets(tc, listOf("১. অ্যাপটা রিসেন্ট থেকে সরিয়ে দিন", "২. অন্য ফোন থেকে এই ফোনে একটা মেসেজ পাঠান (যেমন \"সালাম\")", "৩. অ্যাপ খুলে নিচের বোতাম চাপুন"), 6)
-                addTo(tc, primary("মেসেজ পাঠিয়েছি — ফল দেখুন") { runTest() }, 10)
-                addTo(tc, ghost("বাতিল", mute) { Store.setTestStart(c, 0L); build() }, 8)
-            }
-            addSide(tc, 16)
-        }
-
         // বাড়তি সেটিং (পরীক্ষায় কারণ ধরা পড়লে বা "সমস্যা হচ্ছে?" চাপলে)
+        if (extras.isEmpty() && needSet.isNotEmpty()) Store.setNeed(c, emptySet()) // সমাধান হয়ে গেছে
         if (extras.isNotEmpty()) {
             val ex = card()
-            title(ex, "ফোনের জন্য বাড়তি সেটিং", "চালু করে আবার পরীক্ষা করুন")
+            title(ex, "উত্তর যেতে দেরি হয়েছে", if (needSet.isNotEmpty()) "ফোন অ্যাপটা বন্ধ করে দিচ্ছিল — এটা চালু করুন" else null)
             grid(ex, extras, 12)
             addSide(ex, 16)
         } else if (!moreOpen && (!free || !Store.flag(this, "s_auto"))) {

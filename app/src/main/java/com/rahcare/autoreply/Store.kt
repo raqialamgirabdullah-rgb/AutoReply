@@ -147,6 +147,16 @@ object Store {
     fun need(c: Context): Set<String> = (p(c).getString("need", "") ?: "").split(',').filter { it.isNotEmpty() }.toSet()
     fun setNeed(c: Context, v: Set<String>) = p(c).edit().putString("need", v.joinToString(",")).apply()
 
+    // কোনো মেসেজের উত্তর দেরিতে (অ্যাপ জেগে ওঠার পর) যাচ্ছে মানে ফোন অ্যাপটা বন্ধ করে রেখেছিল: কারণ ধরে শুধু সেই সেটিং সামনে আনে
+    fun missed(c: Context) {
+        val n = HashSet<String>()
+        if (!c.getSystemService(android.os.PowerManager::class.java).isIgnoringBatteryOptimizations(c.packageName)) n.add("battery")
+        val m = android.os.Build.MANUFACTURER.lowercase()
+        if (!flag(c, "s_auto") && listOf("xiaomi", "redmi", "poco", "oppo", "realme", "oneplus", "vivo", "iqoo", "huawei", "honor", "tecno", "infinix", "itel", "transsion", "asus").any { m.contains(it) }) n.add("auto")
+        if (n.isNotEmpty()) setNeed(c, n)
+        ev(c, "উত্তর দেরিতে গেছে; সম্ভাব্য কারণ: $n")
+    }
+
     fun events(c: Context) = p(c).getString("ev", "") ?: ""
 
     fun log(c: Context) = p(c).getString("log", "") ?: ""
