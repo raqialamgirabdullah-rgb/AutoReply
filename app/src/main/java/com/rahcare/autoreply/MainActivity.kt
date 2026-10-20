@@ -654,8 +654,8 @@ class MainActivity : Activity() {
             top.gravity = Gravity.CENTER_VERTICAL
             val col = LinearLayout(this)
             col.orientation = LinearLayout.VERTICAL
-            col.addView(tv("যদি: " + r.keys, 15f, bold = true))
-            val rep = tv("উত্তর: " + r.reply, 13f, mute)
+            col.addView(tv("Receive: " + r.keys, 15f, bold = true))
+            val rep = tv("Send: " + r.reply, 13f, mute)
             rep.setPadding(0, d(3), 0, 0)
             col.addView(rep)
             top.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
@@ -1028,10 +1028,10 @@ class MainActivity : Activity() {
 
     private fun edit(r: Rule?, rules: MutableList<Rule>) {
         val k = EditText(this)
-        k.hint = "কী লিখলে মিলবে (কমা দিয়ে আলাদা করুন)"
+        k.hint = "Receive (কমা দিয়ে আলাদা করুন)"
         k.setText(r?.keys ?: "")
         val rp = EditText(this)
-        rp.hint = "উত্তর"
+        rp.hint = "Send"
         rp.setText(r?.reply ?: "")
         val box = LinearLayout(this)
         box.orientation = LinearLayout.VERTICAL

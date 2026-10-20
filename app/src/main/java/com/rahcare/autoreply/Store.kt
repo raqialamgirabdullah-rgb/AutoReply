@@ -184,14 +184,14 @@ object Store {
             Rule(o.getString("k"), o.getString("r"), o.optBoolean("on", true), o.optBoolean("g", false), o.optBoolean("p", true))
         }
         // আগের ডিফল্ট নিয়ম (কেউ বদলায়নি) থাকলে নতুন ডিফল্টে হালনাগাদ হয়; বদলানো নিয়ম ছোঁয়া হয় না
-        val i = l.indexOfFirst { it.keys == "সালাম, salam" && it.reply == "ওয়ালাইকুম আসসালাম" }
+        val i = l.indexOfFirst { (it.keys == "সালাম, salam" && it.reply == "ওয়ালাইকুম আসসালাম") || (it.keys == "আসসালামু আলাইকুম, আসসালামুয়ালাইকুম, সালাম, Assalamu Alaikum, Assalamualaikum, salam, Hi, Hello" && it.reply == "ওয়া আলাইকুম আসসালাম") }
         if (i >= 0) { val o = l[i]; l[i] = defaultSalam().also { it.on = o.on; it.group = o.group; it.person = o.person } }
         return l
     }
 
     // ডিফল্ট নিয়ম: সালাম ও শুভেচ্ছার নানা রূপে "ওয়া আলাইকুম আসসালাম"
     private fun defaultSalam() = Rule(
-        "আসসালামু আলাইকুম, আসসালামুয়ালাইকুম, সালাম, Assalamu Alaikum, Assalamualaikum, salam, Hi, Hello",
+        "আসসালামু আলাইকুম, আসসালামুয়ালাইকুম, Assalamu Alaikum, Assalamualaikum, Hi, Hello",
         "ওয়া আলাইকুম আসসালাম"
     )
 
