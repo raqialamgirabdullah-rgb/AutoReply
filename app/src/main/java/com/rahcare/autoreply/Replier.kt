@@ -109,7 +109,8 @@ object Replier {
         if (acts == null) { log(c, pkg, uid, sender, text, "নোটিফিকেশনে কোনো বাটন নেই"); return }
         for (a in acts) {
             val ris = a.remoteInputs ?: continue
-            val ri = ris.firstOrNull { it.allowFreeFormInput } ?: continue
+            // আগে মুক্ত-লেখার ঘর; না পেলে যেকোনো সাধারণ (ডেটা-নয়) ইনপুট ঘর, কারণ কিছু অ্যাপ (যেমন Facebook Lite) এভাবে দেয়
+            val ri = ris.firstOrNull { it.allowFreeFormInput } ?: ris.firstOrNull { it.allowedDataTypes.isEmpty() } ?: continue
             if (reply == null) { replyWithAi(c, pkg, uid, sender, text, a, ris, ri); return }
             if (sent.size > 50) sent.clear()
             sent.add(reply)
@@ -118,7 +119,12 @@ object Replier {
             log(c, pkg, uid, sender, text, if (err == null) "উত্তর পাঠানো হয়েছে: $reply" else "পাঠাতে ব্যর্থ ($err)")
             return
         }
-        log(c, pkg, uid, sender, text, "Reply বাটন পাওয়া যায়নি")
+        // কেন পাওয়া গেল না বোঝার জন্য প্রতিটা বাটনের বিবরণ লিখে রাখে
+        val d = acts.joinToString(" | ") { a ->
+            val r = a.remoteInputs
+            "${a.title}[" + (if (r == null) "ইনপুট ঘর নেই" else r.joinToString(",") { "মুক্ত=${it.allowFreeFormInput} বাছাই=${it.choices?.size ?: 0}" }) + "]"
+        }
+        log(c, pkg, uid, sender, text, "Reply বাটন পাওয়া যায়নি — বাটন: $d")
     }
 
     // AI-এর উত্তর আসতে সময় লাগে, তাই আলাদা থ্রেডে API কল করে তারপর একই Reply বাটনে পাঠায়
