@@ -13,6 +13,7 @@ object Store {
         "com.whatsapp.w4b" to "WhatsApp Business",
         "com.facebook.orca" to "Messenger",
         "com.facebook.lite" to "Facebook Lite",
+        "com.facebook.pages.app" to "Meta Business Suite",
         "org.telegram.messenger" to "Telegram"
     )
 
@@ -32,7 +33,7 @@ object Store {
         return when {
             l.contains("w4b") -> "WhatsApp Business"
             l.contains("whatsapp") -> "WhatsApp"
-            l.startsWith("com.facebook.orca") || l.startsWith("com.facebook.lite") -> "Facebook" // Messenger ও Facebook Lite (ক্লোনসহ) সব এক
+            l.startsWith("com.facebook.orca") || l.startsWith("com.facebook.lite") || l.startsWith("com.facebook.pages.app") -> "Facebook" // Messenger, Facebook Lite ও Meta Business Suite (ক্লোনসহ) সব এক
             l.startsWith("org.telegram.messenger") -> "Telegram"
             else -> null
         }
