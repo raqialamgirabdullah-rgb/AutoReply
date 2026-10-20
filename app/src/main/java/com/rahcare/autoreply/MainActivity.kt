@@ -244,7 +244,9 @@ class MainActivity : Activity() {
         // App info থেকে ফিরলে (ব্যবহারকারীর নিজের চাপের পরে) একবার সংশ্লিষ্ট সেটিংস পাতা আবার খুলে দেয়
         val pend = Store.sp(this).getString("info_for", "") ?: ""
         if (pend.isNotEmpty()) {
-            Store.sp(this).edit().remove("info_for").apply()
+            // তালিকা/App info থেকে ফেরা মানে Restricted settings-এর ধাপ শেষ: "চেষ্টা চলছে" চিহ্নও মুছে দিই, নইলে বোতাম চিরকাল "Restricted settings অনুমতি দিন"-এ আটকে থাকে।
+            // এবার বোতাম আবার স্বাভাবিক লেখায় ফেরে; অনুমতি দেওয়ার পরও ব্লক থাকলে পরের চাপে আবার "Restricted settings" দেখাবে।
+            Store.sp(this).edit().remove("info_for").remove("try_$pend").apply()
             if (pend == "notif" && !granted()) startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
             else if (pend == "a11y" && !a11yOn()) startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
         }
