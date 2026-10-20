@@ -8,11 +8,6 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-// সার্ভিস এখন সংযুক্ত আছে কি না (মূল পাতায় অবস্থা দেখানোর জন্য)
-object Live {
-    @Volatile var connected = false
-}
-
 class ReplyService : NotificationListenerService() {
     companion object {
         // সিস্টেম সত্যিই লিসেনার জুড়ে দিয়েছে কি না (মূল পাতায় আসল অবস্থা দেখানোর জন্য)
@@ -50,7 +45,6 @@ class ReplyService : NotificationListenerService() {
     // সিস্টেম সংযোগ কেটে দিলে নিজে থেকে আবার সংযোগ চায়
     override fun onListenerDisconnected() {
         super.onListenerDisconnected()
-        Live.connected = false
         connected = false
         Store.ev(applicationContext, "লিসেনার বিচ্ছিন্ন হয়েছে")
         try { requestRebind(ComponentName(this, ReplyService::class.java)) } catch (e: Exception) {}
