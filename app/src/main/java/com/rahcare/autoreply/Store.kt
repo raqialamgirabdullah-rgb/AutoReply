@@ -4,9 +4,17 @@ import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
 
-class Rule(var keys: String, var reply: String, var on: Boolean = true, var group: Boolean = false, var person: Boolean = true)
+// mode: কীভাবে মেসেজ মিলবে (Store.M_...); আগের নিয়মগুলো M_CONTAINS (মেসেজে শব্দটা থাকলেই) হিসেবে চলে
+class Rule(var keys: String, var reply: String, var on: Boolean = true, var group: Boolean = false, var person: Boolean = true, var mode: Int = Store.M_CONTAINS)
 
 object Store {
+    // নিয়ম মেলানোর ধরন
+    const val M_CONTAINS = 0 // মেসেজে শব্দ থাকলেই (আগের আচরণ)
+    const val M_EXACT = 1    // পুরো মেসেজ হুবহু এক (বড়-ছোট হাতের অক্ষর, ফাঁকা ও চিহ্ন বাদ)
+    const val M_SIMILAR = 2  // পুরো মেসেজ প্রায় এক (বানান ভুল সহ্য করে)
+    const val M_PATTERN = 3  // * চিহ্ন দিয়ে প্যাটার্ন
+    const val M_REGEX = 4    // রেগুলার এক্সপ্রেশন
+
     // নতুন অ্যাপ যোগ করতে এই তালিকায় একটা লাইন বাড়ালেই হবে (প্যাকেজ নাম to দেখানোর নাম)
     val APPS = linkedMapOf(
         "com.whatsapp" to "WhatsApp",
@@ -181,7 +189,7 @@ object Store {
         val a = JSONArray(s)
         val l = MutableList(a.length()) {
             val o = a.getJSONObject(it)
-            Rule(o.getString("k"), o.getString("r"), o.optBoolean("on", true), o.optBoolean("g", false), o.optBoolean("p", true))
+            Rule(o.getString("k"), o.getString("r"), o.optBoolean("on", true), o.optBoolean("g", false), o.optBoolean("p", true), o.optInt("m", M_CONTAINS))
         }
         // আগের ডিফল্ট নিয়ম (কেউ বদলায়নি) থাকলে নতুন ডিফল্টে হালনাগাদ হয়; বদলানো নিয়ম ছোঁয়া হয় না
         val i = l.indexOfFirst { (it.keys == "সালাম, salam" && it.reply == "ওয়ালাইকুম আসসালাম") || (it.keys == "আসসালামু আলাইকুম, আসসালামুয়ালাইকুম, সালাম, Assalamu Alaikum, Assalamualaikum, salam, Hi, Hello" && it.reply == "ওয়া আলাইকুম আসসালাম") }
@@ -195,19 +203,68 @@ object Store {
                 saveRules(c, l)
             }
         }
+        // একবারের হালনাগাদ: ডিফল্ট সালাম নিয়ম "Exact match" হয়; নিজে বদলানো নিয়ম ছোঁয়া হয় না
+        if (!p(c).getBoolean("m_mode_v1", false)) {
+            p(c).edit().putBoolean("m_mode_v1", true).apply()
+            var ch = false
+            for (x in l) if (x.keys == defaultSalam().keys && x.mode == M_CONTAINS) { x.mode = M_EXACT; ch = true }
+            if (ch) saveRules(c, l)
+        }
         return l
     }
 
     // ডিফল্ট নিয়ম: সালাম ও শুভেচ্ছার নানা রূপে "ওয়া আলাইকুম আসসালাম"
     private fun defaultSalam() = Rule(
         "আসসালামু আলাইকুম, আসসালামুয়ালাইকুম, Assalamu Alaikum, Assalamualaikum, Hi, Hello",
-        "ওয়া আলাইকুম আসসালাম"
+        "ওয়া আলাইকুম আসসালাম",
+        mode = M_EXACT
     )
 
     fun saveRules(c: Context, l: List<Rule>) {
         val a = JSONArray()
-        l.forEach { a.put(JSONObject().put("k", it.keys).put("r", it.reply).put("on", it.on).put("g", it.group).put("p", it.person)) }
+        l.forEach { a.put(JSONObject().put("k", it.keys).put("r", it.reply).put("on", it.on).put("g", it.group).put("p", it.person).put("m", it.mode)) }
         p(c).edit().putString("rules", a.toString()).apply()
+    }
+
+    private val PUNCT = Regex("[\\p{P}\\p{S}]+")
+    private val SPACES = Regex("\\s+")
+
+    // তুলনার জন্য: ছোট হাতের, যতিচিহ্ন/ইমোজি বাদ, একাধিক ফাঁকা এক
+    private fun norm(s: String) = s.lowercase().replace(PUNCT, " ").replace(SPACES, " ").trim()
+
+    // দুই লেখার মিল ০..১ (এডিট দূরত্ব দিয়ে)
+    private fun sim(a: String, b: String): Double {
+        if (a == b) return 1.0
+        val m = maxOf(a.length, b.length)
+        if (m == 0 || Math.abs(a.length - b.length) > m * 0.25) return 0.0
+        var prev = IntArray(b.length + 1) { it }
+        for (i in 1..a.length) {
+            val cur = IntArray(b.length + 1)
+            cur[0] = i
+            for (j in 1..b.length) cur[j] = minOf(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + if (a[i - 1] == b[j - 1]) 0 else 1)
+            prev = cur
+        }
+        return 1.0 - prev[b.length].toDouble() / m
+    }
+
+    // একটা নিয়ম এই মেসেজের সাথে মেলে কি না, নিয়মের "ধরন" অনুযায়ী
+    private fun matches(r: Rule, text: String): Boolean {
+        if (r.mode == M_REGEX) {
+            return r.keys.split('\n').map { it.trim() }.filter { it.isNotEmpty() }.any { k ->
+                try { Regex(k, RegexOption.IGNORE_CASE).containsMatchIn(text) } catch (e: Exception) { false }
+            }
+        }
+        val t = text.lowercase()
+        val ks = r.keys.split(',', '،', '\n').map { it.trim().lowercase() }.filter { it.isNotEmpty() }
+        val n = norm(text)
+        return when (r.mode) {
+            M_EXACT -> n.isNotEmpty() && ks.any { norm(it) == n }
+            M_SIMILAR -> n.isNotEmpty() && ks.any { k -> norm(k).let { it.isNotEmpty() && sim(n, it) >= 0.8 } }
+            M_PATTERN -> n.isNotEmpty() && ks.any { k ->
+                Regex(k.split('*').joinToString(".*") { Regex.escape(norm(it)) }, RegexOption.DOT_MATCHES_ALL).matches(n)
+            }
+            else -> ks.any { k -> if (k.length <= 5 && k.all { ch -> ch in 'a'..'z' }) Regex("(^|[^a-z])" + k + "($|[^a-z])").containsMatchIn(t) else t.contains(k) }
+        }
     }
 
     // মেসেজে কোনো নিয়মের শব্দ থাকলে সেই নিয়মের উত্তর ফেরত দেয়; ওপরের নিয়ম আগে মেলে
@@ -219,7 +276,7 @@ object Store {
             // গ্রুপের মেসেজে শুধু "গ্রুপ" চালু নিয়ম, সরাসরি (ব্যক্তির) চ্যাটে শুধু "ব্যক্তি" চালু নিয়ম
             if (group && !r.group) continue
             if (!group && !r.person) continue
-            val hit = r.keys.split(',', '،', '\n').map { it.trim().lowercase() }.filter { it.isNotEmpty() }.any { k -> if (k.length <= 5 && k.all { ch -> ch in 'a'..'z' }) Regex("(^|[^a-z])" + k + "($|[^a-z])").containsMatchIn(t) else t.contains(k) }
+            val hit = matches(r, text)
             if (hit) return r.reply
         }
         return null

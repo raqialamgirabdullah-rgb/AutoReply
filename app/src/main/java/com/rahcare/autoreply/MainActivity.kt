@@ -1182,7 +1182,58 @@ class MainActivity : Activity() {
             return cd
         }
 
-        val k = field("Type the message (separate variants with commas)", r?.keys ?: "")
+        val md = intArrayOf(r?.mode ?: Store.M_EXACT) // নতুন নিয়ম "Exact match" দিয়ে শুরু হয়
+        fun hintFor(m: Int) = when (m) {
+            Store.M_REGEX -> "Type a RegEx (one per line)"
+            Store.M_PATTERN -> "Type a pattern, use * for any text (separate with commas)"
+            else -> "Type the message (separate variants with commas)"
+        }
+        val k = field(hintFor(md[0]), r?.keys ?: "")
+        val modes = listOf(
+            Triple(Store.M_EXACT, "Exact match",
+                "The whole message must be the same as one of your messages. Capital letters, extra spaces and punctuation (! ? । .) are ignored.\n\nExample: \"assalamu alaikum\" matches \"Assalamu Alaikum!\" but NOT \"Karim told Rahim assalamu alaikum\"."),
+            Triple(Store.M_SIMILAR, "Similarity match",
+                "The whole message only needs to be about 80% similar to one of your messages, so small spelling mistakes still match.\n\nExample: \"assalamualaikum\" matches \"assalamu alaikum\"."),
+            Triple(Store.M_PATTERN, "Pattern matching",
+                "Use * for any text. The whole message must fit the pattern.\n\n\"hello*\" matches anything that starts with hello.\n\"*price*\" matches any message that contains price."),
+            Triple(Store.M_REGEX, "Expert pattern matching (RegEx)",
+                "Write a regular expression, one per line. It matches when it is found anywhere in the message; use ^ and \$ to match the whole message."),
+            Triple(Store.M_CONTAINS, "Contains",
+                "The message matches if it contains one of your words anywhere (the old behavior). Short English words like \"hi\" must stand alone.")
+        )
+        val dots = ArrayList<RadioDot>()
+        fun refreshModes() {
+            for ((i, m) in modes.withIndex()) dots[i].checked = md[0] == m.first
+            k.hint = hintFor(md[0])
+        }
+        val recv = LinearLayout(this)
+        recv.orientation = LinearLayout.VERTICAL
+        recv.addView(k)
+        for ((i, m) in modes.withIndex()) {
+            val row = LinearLayout(this)
+            row.orientation = LinearLayout.HORIZONTAL
+            row.gravity = Gravity.CENTER_VERTICAL
+            val dot = RadioDot(this, accent)
+            dots.add(dot)
+            row.addView(dot)
+            val lb = tv(m.second, 16f)
+            lb.setPadding(d(12), d(10), d(8), d(10))
+            row.addView(lb, LinearLayout.LayoutParams(0, wc, 1f))
+            val info = TextView(this)
+            info.text = "i"
+            info.gravity = Gravity.CENTER
+            info.textSize = 13f
+            info.setTypeface(info.typeface, Typeface.BOLD)
+            info.setTextColor(Color.parseColor("#06201C"))
+            info.background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(accent) }
+            info.setOnClickListener {
+                AlertDialog.Builder(this).setTitle(m.second).setMessage(m.third).setPositiveButton("OK", null).show()
+            }
+            row.addView(info, LinearLayout.LayoutParams(d(24), d(24)))
+            row.setOnClickListener { md[0] = m.first; refreshModes() }
+            addTo(recv, row, if (i == 0) 14 else 0)
+        }
+        refreshModes()
         val rp = field("Type the reply", r?.reply ?: "")
         val st = booleanArrayOf(r?.person ?: true, r?.group ?: false) // [People, Groups]
         val who = LinearLayout(this)
@@ -1194,7 +1245,7 @@ class MainActivity : Activity() {
 
         editDirty = {
             k.text.toString().trim() != (r?.keys ?: "") || rp.text.toString().trim() != (r?.reply ?: "") ||
-                st[0] != (r?.person ?: true) || st[1] != (r?.group ?: false)
+                st[0] != (r?.person ?: true) || st[1] != (r?.group ?: false) || md[0] != (r?.mode ?: Store.M_EXACT)
         }
 
         // ওপরের বার
@@ -1246,7 +1297,7 @@ class MainActivity : Activity() {
         val body = LinearLayout(this)
         body.orientation = LinearLayout.VERTICAL
         body.setPadding(d(12), d(12), d(12), d(110))
-        body.addView(sect("Received message", "The incoming message that triggers this reply", k))
+        body.addView(sect("Received message", "The incoming message that triggers this reply", recv))
         addTo(body, sect("Automatic reply", "What gets sent back automatically", rp), 12)
         addTo(body, sect("Reply to", "Where this reply works", who), 12)
         val sv = ScrollView(this)
@@ -1270,7 +1321,12 @@ class MainActivity : Activity() {
                 Toast.makeText(this, "Turn on People or Groups (at least one)", Toast.LENGTH_SHORT).show()
                 return@save
             }
-            if (r == null) rules.add(Rule(ks, rs, true, st[1], st[0])) else {
+            if (md[0] == Store.M_REGEX && ks.split('\n').map { it.trim() }.filter { it.isNotEmpty() }.any { x -> try { Regex(x); false } catch (e: Exception) { true } }) {
+                Toast.makeText(this, "This RegEx is not valid", Toast.LENGTH_SHORT).show()
+                return@save
+            }
+            if (r == null) rules.add(Rule(ks, rs, true, st[1], st[0], md[0])) else {
+                r.mode = md[0]
                 r.keys = ks
                 r.reply = rs
                 r.group = st[1]
@@ -1307,6 +1363,34 @@ class MainActivity : Activity() {
         fabV.morph(false)  // ✔ → +
         window.setSoftInputMode(editPrevMode)
         build()
+    }
+}
+
+/** গোল রেডিও বোতাম: ফাঁপা বৃত্ত, বাছাই হলে ভেতরে ভরাট বিন্দু */
+class RadioDot(ctx: android.content.Context, private val col: Int) : View(ctx) {
+    private val pt = Paint(Paint.ANTI_ALIAS_FLAG)
+    var checked = false
+        set(v) {
+            field = v
+            invalidate()
+        }
+
+    override fun onMeasure(w: Int, h: Int) {
+        val z = (24 * resources.displayMetrics.density).toInt()
+        setMeasuredDimension(z, z)
+    }
+
+    override fun onDraw(c: Canvas) {
+        val d = resources.displayMetrics.density
+        val r = width / 2f
+        pt.color = col
+        pt.style = Paint.Style.STROKE
+        pt.strokeWidth = 2 * d
+        c.drawCircle(r, r, r - 1.5f * d, pt)
+        if (checked) {
+            pt.style = Paint.Style.FILL
+            c.drawCircle(r, r, r - 6.5f * d, pt)
+        }
     }
 }
 
