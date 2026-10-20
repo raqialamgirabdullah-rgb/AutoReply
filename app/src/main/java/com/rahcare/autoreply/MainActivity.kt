@@ -395,10 +395,12 @@ class MainActivity : Activity() {
     }
 
     private fun fillStatus() {
-        val t = statusTv ?: return
-        val st = statusLine()
-        t.text = st.first
-        t.setTextColor(st.second)
+        val t = statusTv
+        if (t != null) {
+            val st = statusLine()
+            t.text = st.first
+            t.setTextColor(st.second)
+        }
         if (Store.enabled(this) && !ReplyService.connected) Watchdog.rebind(this, false)
     }
 
@@ -682,25 +684,8 @@ class MainActivity : Activity() {
         hd.addView(x)
         addTo(side, hd, 0)
 
-        val main = card()
-        val row = LinearLayout(this)
-        row.orientation = LinearLayout.HORIZONTAL
-        row.gravity = Gravity.CENTER_VERTICAL
-        val mc = LinearLayout(this)
-        mc.orientation = LinearLayout.VERTICAL
-        mc.addView(tv(if (on) "Auto-reply On" else "Auto-reply Off", 20f, bold = true))
-        val st = tv("", 12f, mute)
-        mc.addView(st)
-        statusTv = st
-        row.addView(mc, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        row.addView(sw(on) { v -> setMaster(v) })
-        main.addView(row)
+        statusTv = null // মূল সুইচ এখন শুধু ওপরের বারে; সাইডবারে আলাদা কার্ড নেই
         fillStatus()
-        if (!ok) {
-            bullets(main, listOf("অপশনটা ধূসর থাকলে ফোনের Settings → Apps → এই অ্যাপ খুলুন", "ওপরে ডানে ⋮ চেপে \"Allow restricted settings\" দিন", "তারপর আবার চেষ্টা করুন"), 10)
-            addTo(main, primary("নোটিফিকেশন অ্যাক্সেস দিন") { startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }, 10)
-        }
-        addSide(main, 16)
 
         // ========== মূল পাতা: শুধু উত্তরের নিয়ম ==========
         // উত্তরের নিয়ম
@@ -766,17 +751,23 @@ class MainActivity : Activity() {
             val perm = card(warn)
             title(perm, "অনুমতি বাকি আছে")
             grid(perm, missing, 12)
+            if (!ok) bullets(perm, listOf("অপশনটা ধূসর থাকলে ফোনের Settings → Apps → এই অ্যাপ খুলুন", "ওপরে ডানে ⋮ চেপে \"Allow restricted settings\" দিন", "তারপর আবার চেষ্টা করুন"), 10)
             addSide(perm, 16)
         }
 
         // AI স্বয়ংক্রিয় চ্যাট: নিয়ম না মিললে প্রতিষ্ঠানের তথ্য থেকে AI উত্তর দেয়
         val aiCard = card()
-        addTo(aiCard, swRow("AI স্বয়ংক্রিয় চ্যাট", null, Store.aiOn(c)) { v ->
+        val aiRow = LinearLayout(this)
+        aiRow.orientation = LinearLayout.HORIZONTAL
+        aiRow.gravity = Gravity.CENTER_VERTICAL
+        aiRow.addView(tv("AI চ্যাট", 16f, bold = true), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        aiRow.addView(ghost("সেটিংস") { aiDialog() }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { rightMargin = d(12) })
+        aiRow.addView(sw(Store.aiOn(c)) { v ->
             Store.setAiOn(c, v)
-            if (v && !Ai.configured(Ai.cfg(c))) Toast.makeText(c, "আগে \"AI সেটিংস\"-এ API কী এবং নির্দেশ বা তথ্য দিন", Toast.LENGTH_LONG).show()
-        }, 0)
-        addTo(aiCard, ghost("AI সেটিংস") { aiDialog() }, 10)
-        addSide(aiCard, 14)
+            if (v && !Ai.configured(Ai.cfg(c))) Toast.makeText(c, "আগে \"সেটিংস\"-এ API কী এবং নির্দেশ বা তথ্য দিন", Toast.LENGTH_LONG).show()
+        })
+        aiCard.addView(aiRow)
+        addSide(aiCard, 16)
 
         // শেষ ঘটনা
         val act = card()
