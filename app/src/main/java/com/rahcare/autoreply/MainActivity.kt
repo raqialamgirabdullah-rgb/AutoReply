@@ -45,7 +45,7 @@ import java.util.Date
 import java.util.Locale
 
 class MainActivity : Activity() {
-    private lateinit var root: LinearLayout     // মূল পাতা: ফাঁকা (শুধু ভাসমান + বোতাম ও আপডেট এলে আপডেট কার্ড)
+    private lateinit var root: LinearLayout     // মূল পাতা: সেভ করা নিয়মের কার্ড, ভাসমান + ও আপডেট বোতাম
     private lateinit var side: LinearLayout     // সাইডবার: চালু/বন্ধ কার্ড ও বাকি সব অপশন
     private lateinit var sideSv: ScrollView
     private lateinit var scrim: View
@@ -696,7 +696,41 @@ class MainActivity : Activity() {
         }
         addSide(main, 16)
 
-        // ========== মূল পাতা: ফাঁকা; নতুন নিয়ম যোগের জন্য শুধু ভাসমান + বোতাম ==========
+        // ========== মূল পাতা: সেভ করা নিয়মগুলো (কোনো হেডিং বা বর্ণনা ছাড়া); নতুন নিয়মের জন্য ভাসমান + বোতাম ==========
+        val rules = Store.rules(c)
+        val rc = section()
+        for (r in rules) {
+            val rb = LinearLayout(this)
+            rb.orientation = LinearLayout.VERTICAL
+            rb.background = rounded(panel, 16, line)
+            rb.setPadding(d(14), d(12), d(14), d(12))
+            val top = LinearLayout(this)
+            top.orientation = LinearLayout.HORIZONTAL
+            top.gravity = Gravity.CENTER_VERTICAL
+            val col = LinearLayout(this)
+            col.orientation = LinearLayout.VERTICAL
+            col.addView(tv("যদি: " + r.keys, 15f, bold = true))
+            val rep = tv("উত্তর: " + r.reply, 13f, mute)
+            rep.setPadding(0, d(3), 0, 0)
+            col.addView(rep)
+            top.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            top.addView(sw(r.on) { v ->
+                r.on = v
+                Store.saveRules(c, rules)
+            })
+            rb.addView(top)
+            val acts = LinearLayout(this)
+            acts.orientation = LinearLayout.HORIZONTAL
+            acts.addView(ghost("সম্পাদনা") { edit(r, rules) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { rightMargin = d(8) })
+            acts.addView(ghost("মুছুন", warn) {
+                rules.remove(r)
+                Store.saveRules(c, rules)
+                build()
+            }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            addTo(rb, acts, 12)
+            addTo(rc, rb, 12)
+        }
+        add(rc, 12)
 
         // নতুন সংস্করণ এলে শুধু তখনই নিচে মাঝখানে "আপডেট করুন" বোতাম দেখায় (কোনো কার্ড নয়)
         if (up != null) {
