@@ -16,6 +16,11 @@ class NotifAccessibilityService : AccessibilityService() {
         if (e.eventType != AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED) return
         val c = applicationContext
         val pkg = e.packageName?.toString() ?: return
+        // যাচাইয়ের সুইচ: এই পথ বন্ধ থাকলে শুধু পৌঁছানোর রেকর্ড রাখে, উত্তর দেয় না
+        if (Store.off(c, "a11y")) {
+            Store.pl(c, pkg, "Accessibility", "ঘটনা পৌঁছেছে (পরীক্ষার জন্য এই পথ বন্ধ, তাই উত্তর দেয়নি)")
+            return
+        }
         @Suppress("DEPRECATION")
         val n = e.parcelableData as? Notification
         if (n == null) {

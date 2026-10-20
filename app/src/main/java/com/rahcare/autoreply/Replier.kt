@@ -35,6 +35,7 @@ object Replier {
     fun handle(c: Context, pkg: String, uid: Int, key: String, postTime: Long, n: Notification, catchUp: Boolean, markOnly: Boolean) {
         if (catchUp && System.currentTimeMillis() - postTime > 30 * 60 * 1000L) return
         if (pkg == c.packageName || Store.ignored(pkg)) return
+        val path = if (key.startsWith("a11y|")) "Accessibility" else if (catchUp) "লিসেনার-জমা" else "লিসেনার"
         val canReply = n.actions?.any { a -> a.remoteInputs?.any { it.allowFreeFormInput } == true } == true
         val fam = Store.family(pkg)
         if (fam == null && !canReply) return // চেনা পরিবারের নয় এবং Reply-ও নেই: বাদ
@@ -81,8 +82,12 @@ object Replier {
             val dk = "$pkg|$sender|$text|$mid"
             val last = recent[dk]
             // সময়ছাপ থাকলে: একই মেসেজ আগে দেখা হলে বাদ (সময় যতই পার হোক)। সময়ছাপ একেবারেই না থাকলে: শুধু ৩ সেকেন্ডে একই মেসেজ দুই পথে এলে বাদ
-            if (last != null && (mid.isNotEmpty() || now - last < 3000L)) return
+            if (last != null && (mid.isNotEmpty() || now - last < 3000L)) {
+                Store.pl(c, pkg, path, "পরে ধরল (ডুপ্লিকেট, উত্তর আগেই গেছে)")
+                return
+            }
             recent[dk] = now
+            Store.pl(c, pkg, path, "প্রথম ধরল (নোটিফিকেশন তৈরির ${(now - postTime) / 1000} সেকেন্ড পরে)")
             val fromA11y = key.startsWith("a11y|")
             val pk = "$pkg|$sender|$text"
             val lp = lastPath[pk]
@@ -96,6 +101,7 @@ object Replier {
         val hid = key + "|" + mid + "|" + text.hashCode()
         if (catchUp && Store.handled(c, hid)) return
         Store.mark(c, hid)
+        if (catchUp && !markOnly) Store.pl(c, pkg, path, "জমা-মেসেজ নতুন করে ধরল (আগে হ্যান্ডেল হয়নি বলে গণ্য)")
         if (markOnly) return
         if (text in sent) return // এটা আমাদেরই পাঠানো উত্তর
 
@@ -115,6 +121,7 @@ object Replier {
             sent.add(reply)
             val err = send(c, a, ris, ri, reply)
             Store.ev(c, "উত্তর পাঠানোর ফল: " + (err ?: "সফল"))
+            Store.pl(c, pkg, path, "উত্তর " + (err ?: "পাঠানো হয়েছে"))
             log(c, pkg, uid, sender, text, if (err == null) "উত্তর পাঠানো হয়েছে: $reply" else "পাঠাতে ব্যর্থ ($err)")
             return
         }
@@ -150,6 +157,7 @@ object Replier {
                 }
                 val err = send(c, a, ris, ri, ans)
                 Store.ev(c, "AI উত্তরের ফল: " + (err ?: "সফল"))
+                Store.pl(c, pkg, "AI", "AI উত্তর " + (err ?: "পাঠানো হয়েছে"))
                 log(c, pkg, uid, sender, text, if (err == null) "AI উত্তর পাঠানো হয়েছে: ${ans.take(80)}" else "পাঠাতে ব্যর্থ ($err)")
             } catch (e: Exception) {
                 log(c, pkg, uid, sender, text, "AI ব্যর্থ: ${e.javaClass.simpleName}")

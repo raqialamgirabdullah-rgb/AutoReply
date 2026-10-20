@@ -46,6 +46,11 @@ class KeepAliveService : Service() {
             .build()
         if (Build.VERSION.SDK_INT >= 34) startForeground(7, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
         else startForeground(7, n)
+        if (Store.off(this, "keep")) { // যাচাইয়ের সুইচ: সিস্টেম নিজে আবার চালালেও থামিয়ে দেয়
+            stopForeground(Service.STOP_FOREGROUND_REMOVE)
+            stopSelf()
+            return START_NOT_STICKY
+        }
         Watchdog.schedule(this)
         Store.ev(this, "KeepAlive চালু আছে (শক্তিশালী মোড=${Store.strong(this)})")
         h.removeCallbacks(tick)
@@ -77,6 +82,7 @@ class KeepAliveService : Service() {
 
     companion object {
         fun start(c: Context) {
+            if (Store.off(c, "keep")) return // যাচাইয়ের সুইচ
             try { c.startForegroundService(Intent(c, KeepAliveService::class.java)) } catch (e: Exception) {
                 Store.ev(c, "KeepAlive চালু করা ব্যর্থ: ${e.javaClass.simpleName}")
             }

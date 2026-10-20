@@ -20,6 +20,7 @@ object Watchdog {
     )
 
     fun schedule(c: Context, delay: Long = EVERY) {
+        if (Store.off(c, "watch")) return // যাচাইয়ের সুইচ
         try {
             c.getSystemService(AlarmManager::class.java)
                 .setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, System.currentTimeMillis() + delay, pi(c))
@@ -46,6 +47,7 @@ object Watchdog {
 
 class WatchdogReceiver : BroadcastReceiver() {
     override fun onReceive(c: Context, i: Intent) {
+        if (Store.off(c, "watch")) return // যাচাইয়ের সুইচ
         Watchdog.schedule(c)
         val pm = c.getSystemService(android.os.PowerManager::class.java)
         Store.ev(c, "ওয়াচডগ জেগেছে: সংযুক্ত=${ReplyService.connected} স্ক্রিন-চালু=${pm.isInteractive} ডজ=${pm.isDeviceIdleMode}")

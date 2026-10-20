@@ -27,6 +27,11 @@ class ReplyService : NotificationListenerService() {
             val tf = SimpleDateFormat("HH:mm:ss", Locale.US)
             Store.ev(c, "নোটিফিকেশন এসেছে: ${sbn.packageName} reply-বাটন=$ra তৈরি=${tf.format(Date(sbn.postTime))} এখন=${tf.format(Date())} স্ক্রিন-চালু=${pm.isInteractive} ডজ=${pm.isDeviceIdleMode}")
         }
+        // যাচাইয়ের সুইচ: এই পথ বন্ধ থাকলে শুধু পৌঁছানোর রেকর্ড রাখে, উত্তর দেয় না
+        if (Store.off(c, "listener")) {
+            if (Store.family(sbn.packageName) != null) Store.pl(c, sbn.packageName, "লিসেনার", "নোটিফিকেশন পৌঁছেছে (পরীক্ষার জন্য এই পথ বন্ধ, তাই উত্তর দেয়নি)")
+            return
+        }
         // উত্তর পাঠানোর সময় সিপিইউ যেন ঘুমিয়ে না পড়ে
         var wl: PowerManager.WakeLock? = null
         try {
@@ -61,7 +66,7 @@ class ReplyService : NotificationListenerService() {
         if (Store.enabled(c)) KeepAliveService.start(c)
         try {
             val first = !Store.catchInit(c)
-            activeNotifications?.forEach { Replier.handle(c, it.packageName, it.userId, it.key, it.postTime, it.notification, true, first) }
+            if (!Store.off(c, "listener")) activeNotifications?.forEach { Replier.handle(c, it.packageName, it.userId, it.key, it.postTime, it.notification, true, first) }
             if (first) Store.setCatchInit(c)
         } catch (e: Exception) {}
     }
