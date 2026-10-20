@@ -11,7 +11,6 @@ class BootReceiver : BroadcastReceiver() {
         Store.ev(c, "বুট/আপডেটে চালু: ${i.action}")
         Watchdog.schedule(c)
         if (!Store.enabled(c)) return
-        KeepAliveService.start(c)
         Watchdog.rebind(c, false)
     }
 }
