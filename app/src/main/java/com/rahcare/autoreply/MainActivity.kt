@@ -241,20 +241,10 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
-        var waitPerm = false
-        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
-            // প্রথমবার এই অনুমতির ডায়ালগ মিটলে তারপর বাকি ধাপ শুরু হবে
-            if (!Store.flag(this, "s_post")) {
-                Store.setFlag(this, "s_post")
-                waitPerm = true
-            }
-        }
         Watchdog.schedule(this)
         Store.ev(this, "অ্যাপ খোলা হয়েছে")
         if (Store.enabled(this)) KeepAliveService.start(this)
         Watchdog.rebind(this, false)
-        if (!waitPerm) autoSetup()
         val pu = pendingInstallUrl
         if (pu != null && packageManager.canRequestPackageInstalls()) {
             pendingInstallUrl = null
@@ -335,52 +325,6 @@ class MainActivity : Activity() {
     private fun a11yOn() = (Settings.Secure.getString(contentResolver, "enabled_accessibility_services") ?: "").contains("$packageName/")
 
     private fun batteryFree() = getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(packageName)
-
-    // প্রথমবার ইনস্টলের পর অনুমতির ধাপগুলো একটার পর একটা নিজে থেকে খোলে (প্রতিটি একবারই)।
-    // ফোন যেগুলো শুধু ব্যবহারকারীর হাতে দিতে দেয় (নোটিফিকেশন অ্যাক্সেস, Accessibility, ব্যাটারি, Auto-start), সেগুলোর স্ক্রিন এখানে খোলা হয়।
-    private fun autoSetup() {
-        if (Store.flag(this, "setup_done")) return
-        // নতুন ইনস্টল কি না, প্রথম কলেই একবার ঠিক করে মনে রাখা হয় (নইলে অনুমতি দেওয়ার পর "নতুন" থাকে না)
-        if (!Store.flag(this, "setup_init")) {
-            Store.setFlag(this, "setup_init")
-            if (!Store.sp(this).contains("on") && !granted()) Store.setFlag(this, "setup_fresh")
-        }
-        val fresh = Store.flag(this, "setup_fresh")
-        if (!granted() && !Store.flag(this, "s_notif")) {
-            Store.setFlag(this, "s_notif")
-            Toast.makeText(this, "AutoReply-কে চালু করুন (নোটিফিকেশন অ্যাক্সেস)", Toast.LENGTH_LONG).show()
-            startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
-            return
-        }
-        if (!batteryFree() && !Store.flag(this, "s_batt")) {
-            Store.setFlag(this, "s_batt")
-            try {
-                startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName")))
-            } catch (e: Exception) {
-                startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
-            }
-            return
-        }
-        if (!a11yOn() && !Store.flag(this, "s_a11y")) {
-            Store.setFlag(this, "s_a11y")
-            Toast.makeText(this, "দ্রুত উত্তরের জন্য AutoReply-কে Accessibility-তে চালু করুন", Toast.LENGTH_LONG).show()
-            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-            return
-        }
-        if (fresh && !Store.flag(this, "s_auto")) {
-            Store.setFlag(this, "s_auto")
-            openAutostart()
-            return
-        }
-        Store.setFlag(this, "setup_done")
-        if (fresh) {
-            // নতুন ইনস্টলে সব ধাপ শেষে মূল সুইচ নিজে চালু হয়
-            Store.setEnabled(this, true)
-            KeepAliveService.start(this)
-            Watchdog.schedule(this)
-            Watchdog.rebind(this, false)
-        }
-    }
 
     private fun granted() = Watchdog.granted(this)
 
@@ -745,6 +689,17 @@ class MainActivity : Activity() {
                 startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
             }
         })
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            missing.add(ghost("Notification permission", warn) { requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1) })
+        }
+        // Auto-start চালু আছে কি না ফোন থেকে জানা যায় না, তাই একবার চাপলেই তালিকা থেকে সরে যায়
+        if (!Store.flag(this, "s_auto")) {
+            missing.add(ghost("Auto-start অনুমতি", warn) {
+                Store.setFlag(this, "s_auto")
+                openAutostart()
+            })
+        }
+        dot.visibility = if (missing.isNotEmpty()) View.VISIBLE else View.GONE // মেনুর লাল বিন্দু: কোনো অনুমতি বাকি আছে
         if (missing.isNotEmpty()) {
             val perm = card(warn)
             title(perm, "অনুমতি বাকি আছে")
