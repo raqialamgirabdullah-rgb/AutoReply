@@ -1186,9 +1186,11 @@ class MainActivity : Activity() {
         val rp = field("Type the reply", r?.reply ?: "")
         val st = booleanArrayOf(r?.person ?: true, r?.group ?: false) // [People, Groups]
         val who = LinearLayout(this)
-        who.orientation = LinearLayout.VERTICAL
-        who.addView(swRow("People", "Reply in individual chats", st[0]) { st[0] = it })
-        addTo(who, swRow("Groups", "Reply in group chats", st[1]) { st[1] = it }, 4)
+        who.orientation = LinearLayout.HORIZONTAL
+        who.addView(swRow("People", "Individual chats", st[0]) { st[0] = it },
+            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { rightMargin = d(10) })
+        who.addView(swRow("Groups", "Group chats", st[1]) { st[1] = it },
+            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { leftMargin = d(10) })
 
         editDirty = {
             k.text.toString().trim() != (r?.keys ?: "") || rp.text.toString().trim() != (r?.reply ?: "") ||
@@ -1337,11 +1339,11 @@ class FabView(ctx: android.content.Context) : View(ctx) {
     override fun onDraw(c: Canvas) {
         val w = width.toFloat()
         val h = height.toFloat()
-        pt.strokeWidth = w * 0.075f
+        pt.strokeWidth = w * 0.055f
         fun m(a: Float, b: Float) = a + (b - a) * p
         // অনুভূমিক দাগ → ✔-এর ছোট টান
-        c.drawLine(w * m(0.28f, 0.28f), h * m(0.5f, 0.52f), w * m(0.72f, 0.44f), h * m(0.5f, 0.68f), pt)
+        c.drawLine(w * m(0.36f, 0.36f), h * m(0.5f, 0.513f), w * m(0.64f, 0.462f), h * m(0.5f, 0.615f), pt)
         // খাড়া দাগ → ✔-এর লম্বা টান
-        c.drawLine(w * m(0.5f, 0.74f), h * m(0.28f, 0.34f), w * m(0.5f, 0.44f), h * m(0.72f, 0.68f), pt)
+        c.drawLine(w * m(0.5f, 0.654f), h * m(0.36f, 0.398f), w * m(0.5f, 0.462f), h * m(0.64f, 0.615f), pt)
     }
 }
