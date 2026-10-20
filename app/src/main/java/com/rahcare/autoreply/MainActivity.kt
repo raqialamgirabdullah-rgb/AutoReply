@@ -730,13 +730,31 @@ class MainActivity : Activity() {
                 openAutostart()
             })
         }
-        dot.visibility = if (missing.isNotEmpty()) View.VISIBLE else View.GONE // মেনুর লাল বিন্দু: কোনো অনুমতি বাকি আছে
+        val canInst = packageManager.canRequestPackageInstalls()
+        dot.visibility = if (missing.isNotEmpty() || !canInst) View.VISIBLE else View.GONE // মেনুর লাল বিন্দু: কোনো অনুমতি বাকি আছে
         if (missing.isNotEmpty()) {
             val perm = card(warn)
             title(perm, "অনুমতি বাকি আছে")
             grid(perm, missing, 12)
             addSide(perm, 16)
         }
+
+        // আপডেট ইনস্টলের অনুমতি: চাপলে সরাসরি ফোনের "Install unknown apps" পাতা খোলে (একটাই Allow সুইচ)
+        val instRow = LinearLayout(this)
+        instRow.orientation = LinearLayout.HORIZONTAL
+        instRow.gravity = Gravity.CENTER_VERTICAL
+        instRow.background = rounded(panel, 16, if (canInst) line else warn)
+        instRow.setPadding(d(14), d(14), d(14), d(14))
+        instRow.addView(tv("আপডেট ইনস্টলের অনুমতি", 16f, bold = true), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        instRow.addView(tv(if (canInst) "✔ চালু আছে" else "● বন্ধ — চালু করুন", 13f, if (canInst) accent else warn, bold = true))
+        instRow.setOnClickListener {
+            try {
+                startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName")))
+            } catch (e: Exception) {
+                startActivity(Intent(Settings.ACTION_SECURITY_SETTINGS))
+            }
+        }
+        addSide(instRow, 16)
 
         // AI স্বয়ংক্রিয় চ্যাট: নিয়ম না মিললে প্রতিষ্ঠানের তথ্য থেকে AI উত্তর দেয়
         val aiCard = card()
