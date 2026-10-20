@@ -45,7 +45,7 @@ import java.util.Date
 import java.util.Locale
 
 class MainActivity : Activity() {
-    private lateinit var root: LinearLayout     // মূল পাতা: সেভ করা নিয়মের কার্ড, ভাসমান + ও আপডেট বোতাম
+    private lateinit var root: LinearLayout     // মূল পাতা: শুধু উত্তরের নিয়মের কার্ড
     private lateinit var side: LinearLayout     // সাইডবার: চালু/বন্ধ কার্ড ও বাকি সব অপশন
     private lateinit var sideSv: ScrollView
     private lateinit var scrim: View
@@ -696,9 +696,12 @@ class MainActivity : Activity() {
         }
         addSide(main, 16)
 
-        // ========== মূল পাতা: সেভ করা নিয়মগুলো (কোনো হেডিং বা বর্ণনা ছাড়া); নতুন নিয়মের জন্য ভাসমান + বোতাম ==========
+        // ========== মূল পাতা: শুধু উত্তরের নিয়ম ==========
+        // উত্তরের নিয়ম
         val rules = Store.rules(c)
         val rc = section()
+        title(rc, "উত্তরের নিয়ম")
+        bullets(rc, listOf("গ্রুপ চ্যাটে উত্তর যায় না"), 6)
         for (r in rules) {
             val rb = LinearLayout(this)
             rb.orientation = LinearLayout.VERTICAL
