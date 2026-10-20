@@ -525,19 +525,26 @@ class MainActivity : Activity() {
             }
         }
 
-        override fun onMeasure(w: Int, h: Int) = setMeasuredDimension(d(42), d(26))
+        // আঁকা মাপ ৩৬×২১ dp; চারপাশে অদৃশ্য ফাঁক রাখা হয়েছে যাতে আঙুলে চাপতে সুবিধা হয় (পুরো মাপ ৪৮×৩৫ dp)
+        private val padX = d(6)
+        private val padY = d(7)
+
+        override fun onMeasure(w: Int, h: Int) = setMeasuredDimension(d(36) + 2 * padX, d(21) + 2 * padY)
 
         override fun onDraw(c: Canvas) {
-            val w = width.toFloat()
-            val h = height.toFloat()
+            val w = d(36).toFloat()
+            val h = d(21).toFloat()
             val r = h / 2
+            c.save()
+            c.translate(padX.toFloat(), padY.toFloat())
             p.color = ev.evaluate(pos, trackOff, accent) as Int
             c.drawRoundRect(0f, 0f, w, h, r, r, p)
-            val m = d(3).toFloat()
+            val m = 2.5f * resources.displayMetrics.density
             val tr = r - m
             val cx = r + (w - 2 * r) * pos
             p.color = ev.evaluate(pos, thumbOff, Color.WHITE) as Int
             c.drawCircle(cx, r, tr, p)
+            c.restore()
         }
     }
 
@@ -1181,7 +1188,7 @@ class MainActivity : Activity() {
         val who = LinearLayout(this)
         who.orientation = LinearLayout.VERTICAL
         who.addView(swRow("People", "Reply in individual chats", st[0]) { st[0] = it })
-        addTo(who, swRow("Groups", "Reply in group chats", st[1]) { st[1] = it }, 14)
+        addTo(who, swRow("Groups", "Reply in group chats", st[1]) { st[1] = it }, 4)
 
         editDirty = {
             k.text.toString().trim() != (r?.keys ?: "") || rp.text.toString().trim() != (r?.reply ?: "") ||
