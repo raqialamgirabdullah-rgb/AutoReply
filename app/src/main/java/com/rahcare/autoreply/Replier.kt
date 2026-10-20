@@ -115,6 +115,7 @@ object Replier {
             sent.add(reply)
             val err = send(c, a, ris, ri, reply)
             Store.ev(c, "উত্তর পাঠানোর ফল: " + (err ?: "সফল"))
+            if (err == null) Store.stamp(c, "reply")
             log(c, pkg, uid, sender, text, if (err == null) "উত্তর পাঠানো হয়েছে: $reply" else "পাঠাতে ব্যর্থ ($err)")
             return
         }
@@ -150,6 +151,7 @@ object Replier {
                 }
                 val err = send(c, a, ris, ri, ans)
                 Store.ev(c, "AI উত্তরের ফল: " + (err ?: "সফল"))
+                if (err == null) Store.stamp(c, "reply")
                 log(c, pkg, uid, sender, text, if (err == null) "AI উত্তর পাঠানো হয়েছে: ${ans.take(80)}" else "পাঠাতে ব্যর্থ ($err)")
             } catch (e: Exception) {
                 log(c, pkg, uid, sender, text, "AI ব্যর্থ: ${e.javaClass.simpleName}")

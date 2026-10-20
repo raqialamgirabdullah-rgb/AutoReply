@@ -24,6 +24,7 @@ class NotifAccessibilityService : AccessibilityService() {
         }
         val ra = n.actions?.any { a -> a.remoteInputs?.any { it.allowFreeFormInput } == true } == true
         Store.ev(c, "a11y নোটিফিকেশন: $pkg reply-বাটন=$ra")
+        if (Store.family(pkg) != null) Store.stamp(c, "a11y")
         if (!Store.enabled(c)) return
         try {
             Replier.handle(c, pkg, 0, "a11y|$pkg", System.currentTimeMillis(), n, false, false)

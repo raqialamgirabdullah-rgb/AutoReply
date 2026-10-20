@@ -17,11 +17,13 @@ class ReplyService : NotificationListenerService() {
     override fun onCreate() {
         super.onCreate()
         Store.ev(applicationContext, "ReplyService তৈরি (প্রসেস চালু)")
+        Store.stamp(applicationContext, "proc")
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         val c = applicationContext
         if (Store.family(sbn.packageName) != null) {
+            Store.stamp(c, "notif")
             val ra = sbn.notification.actions?.any { a -> a.remoteInputs?.any { it.allowFreeFormInput } == true } == true
             val pm = getSystemService(PowerManager::class.java)
             val tf = SimpleDateFormat("HH:mm:ss", Locale.US)
@@ -47,6 +49,7 @@ class ReplyService : NotificationListenerService() {
         super.onListenerDisconnected()
         connected = false
         Store.ev(applicationContext, "লিসেনার বিচ্ছিন্ন হয়েছে")
+        Store.stamp(applicationContext, "disc")
         try { requestRebind(ComponentName(this, ReplyService::class.java)) } catch (e: Exception) {}
     }
 

@@ -137,6 +137,16 @@ object Store {
     fun flag(c: Context, k: String) = p(c).getBoolean("f_$k", false)
     fun setFlag(c: Context, k: String) = p(c).edit().putBoolean("f_$k", true).apply()
 
+    // পরীক্ষার জন্য সময়ছাপ: proc=প্রসেস নতুন করে চালু, disc=লিসেনার বিচ্ছিন্ন, notif/a11y=মেসেজের নোটিফিকেশন ধরা, reply=উত্তর গেছে
+    fun stamp(c: Context, k: String) = p(c).edit().putLong("t_$k", System.currentTimeMillis()).apply()
+    fun stampOf(c: Context, k: String) = p(c).getLong("t_$k", 0L)
+    fun testStart(c: Context) = p(c).getLong("tst", 0L)
+    fun setTestStart(c: Context, v: Long) = p(c).edit().putLong("tst", v).apply()
+    fun testRes(c: Context) = p(c).getString("tst_res", "") ?: ""
+    fun setTestRes(c: Context, v: String) = p(c).edit().putString("tst_res", v).apply()
+    fun need(c: Context): Set<String> = (p(c).getString("need", "") ?: "").split(',').filter { it.isNotEmpty() }.toSet()
+    fun setNeed(c: Context, v: Set<String>) = p(c).edit().putString("need", v.joinToString(",")).apply()
+
     fun events(c: Context) = p(c).getString("ev", "") ?: ""
 
     fun log(c: Context) = p(c).getString("log", "") ?: ""

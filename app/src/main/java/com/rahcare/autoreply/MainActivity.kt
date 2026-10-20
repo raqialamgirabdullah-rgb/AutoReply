@@ -52,6 +52,7 @@ class MainActivity : Activity() {
     private lateinit var dot: View
     private lateinit var barHolder: FrameLayout
     private var menuOpen = false
+    private var moreOpen = false                // "সমস্যা হচ্ছে?" চাপলে বাড়তি অনুমতিগুলো দেখায়
     private var pendingInstallUrl: String? = null // অনুমতি দিয়ে ফিরলে আপডেট নিজে শুরু হবে
     private var update: Updater.Info? = null
     private var wantInstall = false             // আপডেট-নোটিফিকেশনে চেপে ঢুকলে সরাসরি ইনস্টল শুরু হবে
@@ -262,6 +263,7 @@ class MainActivity : Activity() {
         update = Updater.saved(this)
         if (update == null) Updater.clearNotice(this)
         build()
+        if (Store.testStart(this) != 0L) openMenu() // পরীক্ষা চলছে: ফিরে এলে মেনুতে "ফল দেখুন" বোতাম সামনে আসে
         refreshUpdate()
         handler.removeCallbacks(ticker)
         handler.postDelayed(ticker, 3000)
@@ -575,6 +577,40 @@ class MainActivity : Activity() {
 
     private fun brand() = Build.MANUFACTURER.lowercase()
 
+    // যেসব ফোনে Auto-start সেটিং আলাদা করে লাগে (Samsung/Pixel-এ লাগে না)
+    private fun brandNeedsAuto() = listOf("xiaomi", "redmi", "poco", "oppo", "realme", "oneplus", "vivo", "iqoo", "huawei", "honor", "tecno", "infinix", "itel", "transsion", "asus").any { brand().contains(it) }
+
+    // পরীক্ষার ফল: পরীক্ষা শুরুর পর কী কী ঘটেছে তা সময়ছাপ থেকে দেখে কারণ ধরে
+    private fun runTest() {
+        val c = this
+        val t0 = Store.testStart(c)
+        val replied = Store.stampOf(c, "reply") > t0
+        val seen = maxOf(Store.stampOf(c, "notif"), Store.stampOf(c, "a11y")) > t0
+        val need = HashSet<String>()
+        val res: String
+        if (replied) {
+            res = "✔ সব ঠিক আছে — অ্যাপ বন্ধ থাকলেও মেসেজ ধরা পড়ে উত্তর গেছে"
+        } else if (seen) {
+            res = "✘ মেসেজ ধরা পড়েছে কিন্তু উত্তর যায়নি — \"সর্বশেষ কার্যকলাপ\"-এ কারণ লেখা আছে (নিয়ম না মেলা বা মূল সুইচ বন্ধ থাকা হতে পারে)"
+        } else if (!Store.enabled(c)) {
+            res = "✘ মূল সুইচ বন্ধ ছিল — ওপরের সুইচ চালু করে আবার পরীক্ষা করুন"
+        } else {
+            val why = when {
+                Store.stampOf(c, "proc") > t0 -> "ফোন অ্যাপটা বন্ধ করে দিয়েছিল"
+                Store.stampOf(c, "disc") > t0 -> "নোটিফিকেশনের সংযোগ কেটে গিয়েছিল"
+                else -> "কোনো মেসেজ ধরা পড়েনি"
+            }
+            if (!batteryFree()) need.add("battery")
+            if (brandNeedsAuto() && !Store.flag(c, "s_auto")) need.add("auto")
+            res = if (need.isNotEmpty()) "✘ $why — নিচে এর সমাধানের সেটিং দেখানো হলো; চালু করে আবার পরীক্ষা করুন"
+            else "✘ $why — ফোনের অন্য সেটিং চেষ্টা করুন (যেমন রিসেন্টসে অ্যাপ \"Lock\" করা); \"সমস্যা হচ্ছে?\" চেপে সব অপশন দেখুন"
+        }
+        Store.setNeed(c, need)
+        Store.setTestRes(c, res)
+        Store.setTestStart(c, 0L)
+        build()
+    }
+
     // ফোনের ব্র্যান্ড ধরে সেই ফোনের অটো-স্টার্ট/ব্যাকগ্রাউন্ড সেটিং পেজ সরাসরি খোলে; না পেলে অ্যাপের সেটিংস
     private fun openAutostart() {
         val m = brand()
@@ -679,6 +715,7 @@ class MainActivity : Activity() {
 
         // নতুন সংস্করণ এলে শুধু তখনই নিচে মাঝখানে "আপডেট করুন" বোতাম দেখায় (কোনো কার্ড নয়)
         if (up != null) {
+            updBtn.text = if (packageManager.canRequestPackageInstalls()) "আপডেট করুন" else "আপডেটের অনুমতি দিন"
             updBtn.setOnClickListener { install(up.url) }
             updBtn.visibility = View.VISIBLE
         } else {
@@ -689,6 +726,8 @@ class MainActivity : Activity() {
         // অনুমতি: শুধু যেগুলো বাকি আছে সেগুলোর বোতাম দেখায়; সব ঠিক থাকলে কার্ডটাই থাকে না।
         // শক্তিশালী ব্যাকগ্রাউন্ড মোড সবসময় চালু (আলাদা সুইচ নেই)
         val missing = ArrayList<View>()
+        val extras = ArrayList<View>()          // বাড়তি সেটিং: পরীক্ষায় দরকার ধরা পড়লে বা "সমস্যা হচ্ছে?" চাপলে দেখায়
+        val needSet = Store.need(c)
         // ধাপ ১: প্রথম চাপে সরাসরি সেটিংস; ব্লক থাকলে ফিরে এলে বোতামটা "Restricted settings অনুমতি দিন" হয়ে App info খোলে;
         // App info থেকে ফিরলে অ্যাপ নিজে আবার ওই সেটিংস পাতা খুলে দেয় (onResume দেখুন)
         fun gate(label: String, key: String, tried: Boolean, settings: String) = ghost(
@@ -713,30 +752,62 @@ class MainActivity : Activity() {
         if (a11yOn()) Store.sp(this).edit().remove("try_a11y").apply()
         if (!ok) missing.add(gate("নোটিফিকেশন অ্যাক্সেস দিন", "notif", Store.sp(this).getBoolean("try_notif", false), Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
         if (!a11yOn()) missing.add(gate("Accessibility চালু করুন", "a11y", Store.sp(this).getBoolean("try_a11y", false), Settings.ACTION_ACCESSIBILITY_SETTINGS))
-        if (!free) missing.add(ghost("ব্যাটারি সেভার বাদ দিন", warn) {
+        if (!free && (moreOpen || "battery" in needSet)) extras.add(ghost("ব্যাটারি সেভার বাদ দিন", warn) {
             try {
                 startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName")))
             } catch (e: Exception) {
                 startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
             }
         })
-        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-            missing.add(ghost("Notification permission", warn) { requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1) })
+        if (moreOpen && Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            extras.add(ghost("Notification permission", warn) { requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1) })
         }
         // Auto-start চালু আছে কি না ফোন থেকে জানা যায় না, তাই একবার চাপলেই তালিকা থেকে সরে যায়
-        if (!Store.flag(this, "s_auto")) {
-            missing.add(ghost("Auto-start অনুমতি", warn) {
+        if (!Store.flag(this, "s_auto") && (moreOpen || "auto" in needSet)) {
+            extras.add(ghost("Auto-start অনুমতি", warn) {
                 Store.setFlag(this, "s_auto")
                 openAutostart()
             })
         }
         val canInst = packageManager.canRequestPackageInstalls()
-        dot.visibility = if (missing.isNotEmpty() || !canInst) View.VISIBLE else View.GONE // মেনুর লাল বিন্দু: কোনো অনুমতি বাকি আছে
+        dot.visibility = if (missing.isNotEmpty() || !canInst) View.VISIBLE else View.GONE // মেনুর লাল বিন্দু: মূল অনুমতি বাকি বা আপডেট-অনুমতি বন্ধ
         if (missing.isNotEmpty()) {
             val perm = card(warn)
-            title(perm, "অনুমতি বাকি আছে")
+            title(perm, "অনুমতি বাকি আছে", "প্রথমে এগুলো চালু করুন")
             grid(perm, missing, 12)
             addSide(perm, 16)
+        }
+
+        // পরীক্ষা: মূল অনুমতি হয়ে গেলে সত্যিই উত্তর যায় কি না দেখে, না গেলে কারণ ধরে শুধু সেই সেটিং দেখায়
+        if (ok && a11yOn()) {
+            val tc = card()
+            title(tc, "কাজ করছে কি না পরীক্ষা করুন")
+            val t0 = Store.testStart(c)
+            if (t0 == 0L) {
+                val last = Store.testRes(c)
+                if (last.isNotEmpty()) addTo(tc, tv(last, 13f, if (last.startsWith("✔")) accent else warn), 8)
+                addTo(tc, primary("পরীক্ষা শুরু করুন") {
+                    Store.setTestStart(c, System.currentTimeMillis())
+                    Store.setTestRes(c, "")
+                    Store.setNeed(c, emptySet())
+                    build()
+                }, 10)
+            } else {
+                bullets(tc, listOf("১. অ্যাপটা রিসেন্ট থেকে সরিয়ে দিন", "২. অন্য ফোন থেকে এই ফোনে একটা মেসেজ পাঠান (যেমন \"সালাম\")", "৩. অ্যাপ খুলে নিচের বোতাম চাপুন"), 6)
+                addTo(tc, primary("মেসেজ পাঠিয়েছি — ফল দেখুন") { runTest() }, 10)
+                addTo(tc, ghost("বাতিল", mute) { Store.setTestStart(c, 0L); build() }, 8)
+            }
+            addSide(tc, 16)
+        }
+
+        // বাড়তি সেটিং (পরীক্ষায় কারণ ধরা পড়লে বা "সমস্যা হচ্ছে?" চাপলে)
+        if (extras.isNotEmpty()) {
+            val ex = card()
+            title(ex, "ফোনের জন্য বাড়তি সেটিং", "চালু করে আবার পরীক্ষা করুন")
+            grid(ex, extras, 12)
+            addSide(ex, 16)
+        } else if (!moreOpen && (!free || !Store.flag(this, "s_auto"))) {
+            addSide(ghost("সমস্যা হচ্ছে? আরও অপশন", mute) { moreOpen = true; build() }, 16)
         }
 
         // আপডেট ইনস্টলের অনুমতি: চাপলে সরাসরি ফোনের "Install unknown apps" পাতা খোলে (একটাই Allow সুইচ)
