@@ -539,40 +539,46 @@ class MainActivity : Activity() {
     private fun swCell(t: String, details: List<String>, on: Boolean, f: (Boolean) -> Unit): LinearLayout {
         val r = LinearLayout(this)
         r.orientation = LinearLayout.VERTICAL
+        r.gravity = Gravity.CENTER_HORIZONTAL
         r.background = rounded(panel, 16, line)
-        r.setPadding(d(14), d(12), d(12), d(12))
-        r.addView(tv(t, 14f, bold = true))
-        for (x in details) {
-            val dv = tv(x, 10.5f, mute)
-            dv.maxLines = 1
-            dv.ellipsize = TextUtils.TruncateAt.MIDDLE
-            addTo(r, dv, 2)
+        r.setPadding(d(8), d(12), d(8), d(10))
+        // নাম এক লাইনে থাকে; জায়গা কম হলে অক্ষর নিজে ছোট হয়, ভাঙে না
+        val name = tv(t, 13f, bold = true)
+        name.gravity = Gravity.CENTER
+        name.maxLines = 1
+        name.setAutoSizeTextTypeUniformWithConfiguration(9, 13, 1, android.util.TypedValue.COMPLEX_UNIT_SP)
+        r.addView(name, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        // সুইচ নামের ঠিক নিচেই
+        val s = sw(on) { v -> f(v) }
+        addTo(r, s, 8)
+        (s.layoutParams as LinearLayout.LayoutParams).apply {
+            width = ViewGroup.LayoutParams.WRAP_CONTENT
+            gravity = Gravity.CENTER_HORIZONTAL
         }
-        val bottom = LinearLayout(this)
-        bottom.orientation = LinearLayout.HORIZONTAL
-        bottom.gravity = Gravity.CENTER_VERTICAL
-        val st = tv(if (on) "On" else "Off", 12.5f, if (on) accent else mute, true)
-        bottom.addView(st, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        bottom.addView(sw(on) { v ->
-            st.text = if (v) "On" else "Off"
-            st.setTextColor(if (v) accent else mute)
-            f(v)
-        })
-        addTo(r, bottom, 8)
+        for (x in details) {
+            val dv = tv(x, 10f, mute)
+            dv.maxLines = 1
+            dv.gravity = Gravity.CENTER
+            dv.ellipsize = TextUtils.TruncateAt.MIDDLE
+            addTo(r, dv, 4)
+        }
         return r
     }
 
-    // ঘরগুলো একই সারিতে দুই কলামে সাজায়; সংখ্যা বিজোড় হলে শেষ সারির ডান পাশ ফাঁকা থাকে
-    private fun grid(p: LinearLayout, cells: List<View>, top: Int = 8) {
+    private fun grid(p: LinearLayout, cells: List<View>, top: Int = 8, cols: Int = 2) {
         var i = 0
         while (i < cells.size) {
             val r = LinearLayout(this)
             r.orientation = LinearLayout.HORIZONTAL
-            r.addView(cells[i], LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f).apply { rightMargin = d(4) })
-            val b = cells.getOrNull(i + 1) ?: View(this)
-            r.addView(b, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f).apply { leftMargin = d(4) })
+            for (k in 0 until cols) {
+                val v = cells.getOrNull(i + k) ?: View(this)
+                r.addView(v, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f).apply {
+                    if (k > 0) leftMargin = d(4)
+                    if (k < cols - 1) rightMargin = d(4)
+                })
+            }
             addTo(p, r, if (i == 0) top else 8)
-            i += 2
+            i += cols
         }
     }
 
@@ -808,7 +814,7 @@ class MainActivity : Activity() {
             det.add(fmt.format(Date(i.t)))
             cells.add(swCell("অচেনা অ্যাপ", det, Store.instOn(c, i.pkg, i.uid)) { v -> Store.setInstOn(c, i.pkg, i.uid, v) })
         }
-        grid(apps, cells, 12)
+        grid(apps, cells, 12, 3)
         addSide(apps, 14)
 
         // সংস্করণ (আপডেটের বোতাম শুধু মূল পাতায়; সাইডবারে কেবল সংস্করণ দেখায়)
