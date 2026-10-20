@@ -21,6 +21,7 @@ jobs:
       contents: write
       pull-requests: write
       issues: write
+      actions: write
     steps:
       - name: Checkout main
         uses: actions/checkout@v4
@@ -145,6 +146,24 @@ jobs:
               print('\nসম্পূর্ণ ত্রুটি-রিপোর্ট (ছোট করা):\n```\n' + text[:1800] + '\n```')
           PY
           gh issue comment "$ISSUE_NUMBER" --body-file /tmp/report.md
+
+      # মালিক জানিয়েছেন মার্জ নিজে থেকে হলেও সমস্যা নেই (ইতিহাস থেকে যেকোনো সময় ফেরানো যায়)।
+      # GITHUB_TOKEN-এর মার্জ "push" ইভেন্ট চালু করে না, তাই বিল্ড আলাদা করে workflow_dispatch দিয়ে শুরু করা হয়
+      - name: Auto-merge the pull request and start the APK build
+        if: steps.gemini.outcome == 'success' && steps.report.outputs.nopr == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          PR=$(gh pr list --head "gemini/issue-$ISSUE_NUMBER" --state open --json number --jq '.[0].number')
+          if [ -z "$PR" ]; then exit 0; fi
+          if gh pr merge "$PR" --squash --delete-branch; then
+            gh workflow run build-apk.yml --ref main
+            gh issue comment "$ISSUE_NUMBER" --body "✔ Pull Request #$PR মার্জ হয়েছে। নতুন সংস্করণের বিল্ড শুরু হয়েছে — কয়েক মিনিট পরে অ্যাপে আপডেট বোতাম আসবে। কিছু ভুল হলে Claude-কে জানান।"
+          else
+            gh issue comment "$ISSUE_NUMBER" --body "⚠ Pull Request #$PR নিজে মার্জ করা গেল না (কনফ্লিক্ট বা অনুমতি)। GitHub-এ গিয়ে দেখুন।"
+            exit 1
+          fi
 
       - name: Fail the job if Gemini failed or opened no PR
         if: always() && (steps.gemini.outcome == 'failure' || steps.report.outputs.nopr == 'true')
