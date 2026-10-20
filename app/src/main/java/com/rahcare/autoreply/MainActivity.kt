@@ -645,35 +645,31 @@ class MainActivity : Activity() {
         val rules = Store.rules(c)
         val rc = section()
         for (r in rules) {
-            val rb = LinearLayout(this)
-            rb.orientation = LinearLayout.VERTICAL
-            rb.background = rounded(panel, 16, line)
-            rb.setPadding(d(14), d(12), d(14), d(12))
+            // ছোট একটা সারি: লেখায় চাপলেই সম্পাদনা (মুছুনও সেখানে), একেবারে ডানে সুইচ
             val top = LinearLayout(this)
             top.orientation = LinearLayout.HORIZONTAL
             top.gravity = Gravity.CENTER_VERTICAL
+            top.background = rounded(panel, 14, if (r.on) accent else line)
+            top.setPadding(d(14), d(10), d(10), d(10))
             val col = LinearLayout(this)
             col.orientation = LinearLayout.VERTICAL
-            col.addView(tv("Receive: " + r.keys, 15f, bold = true))
-            val rep = tv("Send: " + r.reply, 13f, mute)
-            rep.setPadding(0, d(3), 0, 0)
+            val rcv = tv("Receive:  " + r.keys, 14f, bold = true)
+            rcv.maxLines = 2
+            rcv.ellipsize = TextUtils.TruncateAt.END
+            col.addView(rcv)
+            val rep = tv("Send:  " + r.reply, 13f, mute)
+            rep.maxLines = 2
+            rep.ellipsize = TextUtils.TruncateAt.END
+            rep.setPadding(0, d(4), 0, 0)
             col.addView(rep)
+            col.setOnClickListener { edit(r, rules) }
             top.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             top.addView(sw(r.on) { v ->
                 r.on = v
                 Store.saveRules(c, rules)
+                top.background = rounded(panel, 14, if (v) accent else line)
             })
-            rb.addView(top)
-            val acts = LinearLayout(this)
-            acts.orientation = LinearLayout.HORIZONTAL
-            acts.addView(ghost("সম্পাদনা") { edit(r, rules) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { rightMargin = d(8) })
-            acts.addView(ghost("মুছুন", warn) {
-                rules.remove(r)
-                Store.saveRules(c, rules)
-                build()
-            }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-            addTo(rb, acts, 12)
-            addTo(rc, rb, 12)
+            addTo(rc, top, 10)
         }
         add(rc, 12)
 
@@ -1060,14 +1056,25 @@ class MainActivity : Activity() {
         cancel.setPadding(d(10), d(10), d(10), d(10))
         val save = tv("সংরক্ষণ", 15f, accent, true)
         save.setPadding(d(10), d(10), d(4), d(10))
-        foot.addView(cancel)
-        foot.addView(save)
-        addTo(box, foot, 14)
-
         val dlg = AlertDialog.Builder(this)
             .setTitle(if (r == null) "নতুন নিয়ম" else "নিয়ম সম্পাদনা")
             .setView(box)
             .create()
+        if (r != null) {
+            val del = tv("মুছুন", 15f, warn, true)
+            del.setPadding(d(10), d(10), d(10), d(10))
+            del.setOnClickListener {
+                rules.remove(r)
+                Store.saveRules(this, rules)
+                dlg.dismiss()
+                build()
+            }
+            foot.addView(del)
+        }
+        foot.addView(cancel)
+        foot.addView(save)
+        addTo(box, foot, 14)
+
         cancel.setOnClickListener { dlg.dismiss() }
         save.setOnClickListener {
             val ks = k.text.toString().trim()
