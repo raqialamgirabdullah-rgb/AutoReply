@@ -174,7 +174,7 @@ class DevChatActivity : Activity() {
         input.setHintTextColor(mute)
         input.background = rounded(inner, 22, line)
         input.setPadding(d(16), d(10), d(16), d(10))
-        input.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_CAPITALIZE_SENTENCES
+        input.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
         input.maxLines = 5
         inputRow.addView(input, LinearLayout.LayoutParams(0, wc, 1f))
         val send = tv("পাঠান", 15f, Color.parseColor("#06201C"), true)
