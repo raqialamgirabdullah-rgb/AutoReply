@@ -13,6 +13,7 @@ import android.animation.ValueAnimator
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
@@ -657,13 +658,35 @@ class MainActivity : Activity() {
             rcv.maxLines = 2
             rcv.ellipsize = TextUtils.TruncateAt.END
             col.addView(rcv)
+            val ln = View(this)
+            ln.setBackgroundColor(mute and 0x00FFFFFF or 0x55000000)
+            col.addView(ln, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 1).apply { topMargin = d(6) })
             val rep = tv("Send:  " + r.reply, 13f, mute)
             rep.maxLines = 2
             rep.ellipsize = TextUtils.TruncateAt.END
-            rep.setPadding(0, d(4), 0, 0)
+            rep.setPadding(0, d(6), 0, 0)
             col.addView(rep)
             col.setOnClickListener { edit(r, rules) }
             top.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            // তীর চিহ্ন: চাপলে Send-এর লেখাটা শেয়ার অপশনে (যেকোনো অ্যাপে, যে কাউকে) পাঠানো যায়
+            val plane = object : View(this) {
+                override fun onDraw(cv: Canvas) {
+                    val w = width.toFloat(); val h = height.toFloat()
+                    val pt = Paint(Paint.ANTI_ALIAS_FLAG); pt.color = mute
+                    val path = Path()
+                    path.moveTo(w * 0.12f, h * 0.15f); path.lineTo(w * 0.92f, h * 0.5f); path.lineTo(w * 0.12f, h * 0.85f)
+                    path.lineTo(w * 0.28f, h * 0.5f); path.close()
+                    cv.drawPath(path, pt)
+                }
+            }
+            plane.contentDescription = "শেয়ার"
+            plane.setOnClickListener {
+                val i = Intent(Intent.ACTION_SEND)
+                i.type = "text/plain"
+                i.putExtra(Intent.EXTRA_TEXT, r.reply)
+                try { startActivity(Intent.createChooser(i, "পাঠান")) } catch (e: Exception) {}
+            }
+            top.addView(plane, LinearLayout.LayoutParams(d(30), d(30)).apply { rightMargin = d(10); leftMargin = d(6) })
             top.addView(sw(r.on) { v ->
                 r.on = v
                 Store.saveRules(c, rules)
