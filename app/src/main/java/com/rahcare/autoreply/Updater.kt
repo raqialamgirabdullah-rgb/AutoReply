@@ -81,35 +81,6 @@ object Updater {
         } catch (e: Exception) {}
     }
 
-    // আপডেট ইনস্টল হওয়ার পর (নতুন প্রসেসে) ডাকা হয়: অ্যাপ আগে খোলা থাকলে নিজে আবার খুলতে চেষ্টা করে (ফোন ব্যাকগ্রাউন্ড থেকে খুলতে না দিলে হয় না),
-    // আর সবসময় "আপডেট হয়ে গেছে" নোটিফিকেশন দেয়; চাপলে অ্যাপ খোলে
-    fun afterUpdate(c: Context) {
-        val sp = Store.sp(c)
-        val wasOpen = sp.getBoolean("ui_open", false)
-        sp.edit().putInt("just_upd", curVer(c)).putBoolean("ui_open", false).apply()
-        val go = Intent(c, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-        if (wasOpen) {
-            try { c.startActivity(go) } catch (e: Exception) {}
-        }
-        try {
-            val nm = c.getSystemService(NotificationManager::class.java)
-            nm.createNotificationChannel(NotificationChannel("update", "AutoReply আপডেট", NotificationManager.IMPORTANCE_DEFAULT))
-            val pi = PendingIntent.getActivity(c, 9, go, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-            val n = Notification.Builder(c, "update")
-                .setSmallIcon(android.R.drawable.stat_sys_download_done)
-                .setContentTitle("আপডেট হয়ে গেছে")
-                .setContentText("সংস্করণ ${curVer(c)} — চাপুন, অ্যাপ খুলবে")
-                .setContentIntent(pi)
-                .setAutoCancel(true)
-                .build()
-            nm.notify(9, n)
-        } catch (e: Exception) {}
-    }
-
-    fun clearUpdated(c: Context) {
-        try { c.getSystemService(NotificationManager::class.java).cancel(9) } catch (e: Exception) {}
-    }
-
     fun clearNotice(c: Context) {
         try { c.getSystemService(NotificationManager::class.java).cancel(8) } catch (e: Exception) {}
     }
