@@ -69,12 +69,10 @@ class MainActivity : Activity() {
 
     private val handler = Handler(Looper.getMainLooper())
     private var logBox: LinearLayout? = null
-    private var plBox: TextView? = null
     private var logShown = "\u0000"
     private val ticker = object : Runnable {
         override fun run() {
             fillLog()
-            fillPl()
             fillStatus()
             if (System.currentTimeMillis() - lastCheck > 5 * 60 * 1000L) refreshUpdate()
             handler.postDelayed(this, 3000)
@@ -243,7 +241,6 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
-        Store.uiOpen = true
         // App info থেকে ফিরলে (ব্যবহারকারীর নিজের চাপের পরে) একবার সংশ্লিষ্ট সেটিংস পাতা আবার খুলে দেয়
         val pend = Store.sp(this).getString("info_for", "") ?: ""
         if (pend.isNotEmpty()) {
@@ -270,7 +267,6 @@ class MainActivity : Activity() {
 
     override fun onPause() {
         super.onPause()
-        Store.uiOpen = false
         handler.removeCallbacks(ticker)
     }
 
@@ -542,12 +538,6 @@ class MainActivity : Activity() {
     private fun addSide(v: View, top: Int = 14) = addTo(side, v, top)
 
     // শেষ ঘটনা সাজিয়ে দেখায়; ৩ সেকেন্ড পরপর নিজে থেকে নতুন হয় (রিফ্রেশ বোতাম লাগে না)
-    private fun fillPl() {
-        val b = plBox ?: return
-        val raw = Store.pathLog(this).split('\n').filter { it.isNotEmpty() }.takeLast(20).joinToString("\n")
-        b.text = raw.ifEmpty { "এখনো কোনো রেকর্ড নেই" }
-    }
-
     private fun fillLog() {
         val box = logBox ?: return
         val raw = Store.log(this)
@@ -759,51 +749,6 @@ class MainActivity : Activity() {
         })
         aiCard.addView(aiRow)
         addSide(aiCard, 16)
-
-        // যাচাই: কোন অংশ আসলে লাগে মাপার জন্য (ডিফল্টে সব চালু; পরীক্ষা শেষে সব চালু রাখুন)
-        val vf = card()
-        title(vf, "যাচাই (কোন অংশ লাগে মাপুন)")
-        bullets(vf, listOf(
-            "যে অংশ পরীক্ষা করতে চান সেটা নিচের সুইচে বন্ধ করুন (যেমন শুধু Accessibility রেখে বাকি সব বন্ধ)",
-            "অ্যাপ সোয়াইপ করে বন্ধ করুন, স্ক্রিন বন্ধ রাখুন, তারপর অন্য ফোন থেকে একটা মেসেজ পাঠান",
-            "স্ক্রিন না জ্বালিয়ে ১ মিনিট দেখুন উত্তর গেল কি না, তারপর অ্যাপ খুলে নিচের রেকর্ড দেখুন"
-        ), 6)
-        fun tsw(label: String, sub: String, key: String, after: () -> Unit = {}) {
-            addTo(vf, swRow(label, sub, !Store.off(c, key)) { v ->
-                Store.setOff(c, key, !v)
-                after()
-            }, 12)
-        }
-        tsw("লিসেনার পথ", "নোটিফিকেশন-লিসেনার দিয়ে মেসেজ ধরা", "listener")
-        tsw("Accessibility পথ", "Accessibility সহায়ক দিয়ে মেসেজ ধরা", "a11y")
-        tsw("KeepAlive সার্ভিস", "ওপরের বারের স্থায়ী নোটিফিকেশন", "keep") {
-            if (Store.off(c, "keep")) KeepAliveService.stop(c) else if (Store.enabled(c)) KeepAliveService.start(c)
-        }
-        tsw("ওয়াচডগ", "প্রতি ~১০ মিনিটে সার্ভিস দেখার অ্যালার্ম", "watch") {
-            if (!Store.off(c, "watch")) Watchdog.schedule(c)
-        }
-        addTo(vf, swRow("শক্তিশালী মোড", "CPU জাগিয়ে রাখে (ব্যাটারি বেশি খরচ)", Store.strong(c)) { v ->
-            Store.setStrong(c, v)
-            if (Store.enabled(c)) KeepAliveService.start(c)
-        }, 12)
-        val pb = tv("", 11f, mute)
-        pb.typeface = android.graphics.Typeface.MONOSPACE
-        addTo(vf, pb, 14)
-        plBox = pb
-        fillPl()
-        addTo(vf, ghost("রেকর্ড কপি করুন") {
-            val cm = getSystemService(android.content.ClipboardManager::class.java)
-            cm.setPrimaryClip(android.content.ClipData.newPlainText("autoreply-check", Store.pathLog(c)))
-            Toast.makeText(c, "কপি হয়েছে", Toast.LENGTH_SHORT).show()
-        }, 12)
-        addTo(vf, ghost("রেকর্ড মুছুন", mute) { Store.clearPathLog(c); fillPl() }, 8)
-        addTo(vf, ghost("সব অংশ চালু করুন") {
-            for (k in listOf("listener", "a11y", "keep", "watch")) Store.setOff(c, k, false)
-            Store.setStrong(c, true)
-            if (Store.enabled(c)) { KeepAliveService.start(c); Watchdog.schedule(c) }
-            build()
-        }, 8)
-        addSide(vf, 14)
 
         // শেষ ঘটনা
         val act = card()

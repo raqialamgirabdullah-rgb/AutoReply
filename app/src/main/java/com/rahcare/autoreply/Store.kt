@@ -137,27 +137,6 @@ object Store {
     fun flag(c: Context, k: String) = p(c).getBoolean("f_$k", false)
     fun setFlag(c: Context, k: String) = p(c).edit().putBoolean("f_$k", true).apply()
 
-    // ---------- যাচাই: কোন অংশ লাগে কি না মাপার জন্য ----------
-    // সুইচ: কোন অংশ পরীক্ষার জন্য বন্ধ করা আছে। ডিফল্টে কিছুই বন্ধ নয়, তাই স্বাভাবিক আচরণ বদলায় না। কী: listener, a11y, keep, watch
-    fun off(c: Context, k: String) = p(c).getBoolean("t_off_$k", false)
-    fun setOff(c: Context, k: String, v: Boolean) = p(c).edit().putBoolean("t_off_$k", v).apply()
-
-    // অ্যাপ এই মুহূর্তে সামনে খোলা কি না (যাচাইয়ের রেকর্ডে লেখার জন্য)
-    @Volatile var uiOpen = false
-
-    // যাচাইয়ের রেকর্ড (শেষ ৪০টা): কোন পথে মেসেজ ধরা পড়ল, তখন অ্যাপ খোলা ছিল কি না, উত্তর গেল কি না
-    @Synchronized
-    fun pl(c: Context, pkg: String, path: String, what: String) {
-        try {
-            val t = java.text.SimpleDateFormat("dd HH:mm:ss", java.util.Locale.US).format(java.util.Date())
-            val l = (p(c).getString("pl", "") ?: "").split('\n').filter { it.isNotEmpty() }
-            val line = "$t | $path | ${family(pkg) ?: pkg} | অ্যাপ=" + (if (uiOpen) "খোলা" else "বন্ধ") + " | $what"
-            p(c).edit().putString("pl", (l + line).takeLast(40).joinToString("\n")).apply()
-        } catch (e: Exception) {}
-    }
-    fun pathLog(c: Context) = p(c).getString("pl", "") ?: ""
-    fun clearPathLog(c: Context) = p(c).edit().remove("pl").apply()
-
     fun events(c: Context) = p(c).getString("ev", "") ?: ""
 
     fun log(c: Context) = p(c).getString("log", "") ?: ""
