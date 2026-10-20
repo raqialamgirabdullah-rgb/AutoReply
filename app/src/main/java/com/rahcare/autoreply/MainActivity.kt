@@ -172,8 +172,9 @@ class MainActivity : Activity() {
             elevation = d(6).toFloat()
             visibility = View.GONE
         }
-        frame.addView(updBtn, FrameLayout.LayoutParams(wc, d(52), Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply {
-            bottomMargin = d(27)
+        frame.addView(updBtn, FrameLayout.LayoutParams(wc, d(52), Gravity.BOTTOM or Gravity.END).apply {
+            rightMargin = d(88)
+            bottomMargin = d(24)
         })
         editPage = FrameLayout(this).apply {
             setBackgroundColor(Color.parseColor("#0B0F14"))
