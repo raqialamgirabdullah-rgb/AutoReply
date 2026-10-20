@@ -241,6 +241,13 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        // App info থেকে ফিরলে (ব্যবহারকারীর নিজের চাপের পরে) একবার সংশ্লিষ্ট সেটিংস পাতা আবার খুলে দেয়
+        val pend = Store.sp(this).getString("info_for", "") ?: ""
+        if (pend.isNotEmpty()) {
+            Store.sp(this).edit().remove("info_for").apply()
+            if (pend == "notif" && !granted()) startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+            else if (pend == "a11y" && !a11yOn()) startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+        }
         Watchdog.schedule(this)
         Store.ev(this, "অ্যাপ খোলা হয়েছে")
         if (Store.enabled(this)) KeepAliveService.start(this)
@@ -680,8 +687,24 @@ class MainActivity : Activity() {
         // অনুমতি: শুধু যেগুলো বাকি আছে সেগুলোর বোতাম দেখায়; সব ঠিক থাকলে কার্ডটাই থাকে না।
         // শক্তিশালী ব্যাকগ্রাউন্ড মোড সবসময় চালু (আলাদা সুইচ নেই)
         val missing = ArrayList<View>()
-        if (!ok) missing.add(ghost("নোটিফিকেশন অ্যাক্সেস দিন", warn) { startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) })
-        if (!a11yOn()) missing.add(ghost("Accessibility চালু করুন", warn) { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) })
+        // ধাপ ১: প্রথম চাপে সরাসরি সেটিংস; ব্লক থাকলে ফিরে এলে বোতামটা "Restricted settings অনুমতি দিন" হয়ে App info খোলে;
+        // App info থেকে ফিরলে অ্যাপ নিজে আবার ওই সেটিংস পাতা খুলে দেয় (onResume দেখুন)
+        fun gate(label: String, key: String, tried: Boolean, settings: String) = ghost(
+            if (tried) "Restricted settings অনুমতি দিন" else label, warn
+        ) {
+            if (tried) {
+                Store.sp(this).edit().putString("info_for", key).apply()
+                Toast.makeText(this, "ওপরে ডানে ⋮ চেপে \"Allow restricted settings\" দিন, তারপর ফিরে আসুন", Toast.LENGTH_LONG).show()
+                startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
+            } else {
+                Store.sp(this).edit().putBoolean("try_$key", true).apply()
+                startActivity(Intent(settings))
+            }
+        }
+        if (ok) Store.sp(this).edit().remove("try_notif").apply()
+        if (a11yOn()) Store.sp(this).edit().remove("try_a11y").apply()
+        if (!ok) missing.add(gate("নোটিফিকেশন অ্যাক্সেস দিন", "notif", Store.sp(this).getBoolean("try_notif", false), Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+        if (!a11yOn()) missing.add(gate("Accessibility চালু করুন", "a11y", Store.sp(this).getBoolean("try_a11y", false), Settings.ACTION_ACCESSIBILITY_SETTINGS))
         if (!free) missing.add(ghost("ব্যাটারি সেভার বাদ দিন", warn) {
             try {
                 startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName")))
@@ -704,12 +727,6 @@ class MainActivity : Activity() {
             val perm = card(warn)
             title(perm, "অনুমতি বাকি আছে")
             grid(perm, missing, 12)
-            if (!ok || !a11yOn()) {
-                bullets(perm, listOf("অপশনটা ধূসর থাকলে নিচের \"App info খুলুন\" চাপুন", "খোলা পাতায় ওপরে ডানে ⋮ চেপে \"Allow restricted settings\" দিন", "তারপর ফিরে এসে আবার চেষ্টা করুন"), 10)
-                addTo(perm, ghost("App info খুলুন", accent) {
-                    startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
-                }, 10)
-            }
             addSide(perm, 16)
         }
 
