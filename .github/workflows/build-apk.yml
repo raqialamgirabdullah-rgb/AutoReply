@@ -51,7 +51,7 @@ jobs:
         if: failure()
         shell: bash
         run: |
-          tail -n 150 build.log > /tmp/build-error.log 2>/dev/null || echo "no build log" > /tmp/build-error.log
+          (grep -E "^e: |error:|Unresolved|mismatch" build.log | head -40; echo "---- tail ----"; tail -n 40 build.log) > /tmp/build-error.log 2>/dev/null || echo "no build log" > /tmp/build-error.log
           git config user.name github-actions
           git config user.email github-actions@users.noreply.github.com
           git checkout --orphan build-logs
