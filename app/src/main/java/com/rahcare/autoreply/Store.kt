@@ -177,13 +177,23 @@ object Store {
 
     fun rules(c: Context): MutableList<Rule> {
         val s = p(c).getString("rules", null)
-            ?: return mutableListOf(Rule("সালাম, salam", "ওয়ালাইকুম আসসালাম"))
+            ?: return mutableListOf(defaultSalam())
         val a = JSONArray(s)
-        return MutableList(a.length()) {
+        val l = MutableList(a.length()) {
             val o = a.getJSONObject(it)
             Rule(o.getString("k"), o.getString("r"), o.optBoolean("on", true), o.optBoolean("g", false), o.optBoolean("p", true))
         }
+        // আগের ডিফল্ট নিয়ম (কেউ বদলায়নি) থাকলে নতুন ডিফল্টে হালনাগাদ হয়; বদলানো নিয়ম ছোঁয়া হয় না
+        val i = l.indexOfFirst { it.keys == "সালাম, salam" && it.reply == "ওয়ালাইকুম আসসালাম" }
+        if (i >= 0) { val o = l[i]; l[i] = defaultSalam().also { it.on = o.on; it.group = o.group; it.person = o.person } }
+        return l
     }
+
+    // ডিফল্ট নিয়ম: সালাম ও শুভেচ্ছার নানা রূপে "ওয়া আলাইকুম আসসালাম"
+    private fun defaultSalam() = Rule(
+        "আসসালামু আলাইকুম, আসসালামুয়ালাইকুম, সালাম, Assalamu Alaikum, Assalamualaikum, salam, Hi, Hello",
+        "ওয়া আলাইকুম আসসালাম"
+    )
 
     fun saveRules(c: Context, l: List<Rule>) {
         val a = JSONArray()
@@ -200,7 +210,7 @@ object Store {
             // গ্রুপের মেসেজে শুধু "গ্রুপ" চালু নিয়ম, সরাসরি (ব্যক্তির) চ্যাটে শুধু "ব্যক্তি" চালু নিয়ম
             if (group && !r.group) continue
             if (!group && !r.person) continue
-            val hit = r.keys.split(',', '،', '\n').map { it.trim().lowercase() }.filter { it.isNotEmpty() }.any { t.contains(it) }
+            val hit = r.keys.split(',', '،', '\n').map { it.trim().lowercase() }.filter { it.isNotEmpty() }.any { k -> if (k.length <= 5 && k.all { ch -> ch in 'a'..'z' }) Regex("(^|[^a-z])" + k + "($|[^a-z])").containsMatchIn(t) else t.contains(k) }
             if (hit) return r.reply
         }
         return null
