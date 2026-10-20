@@ -735,26 +735,6 @@ class MainActivity : Activity() {
             addSide(perm, 16)
         }
 
-        // ---- সাময়িক পরীক্ষা (পরে মুছে ফেলা হবে): App info তিন ভঙ্গিতে খোলে; কোনটায় ওপরে ডানে ⋮ মেনু আসে সেটা দেখার জন্য ----
-        run {
-            val t = card()
-            title(t, "TEST: App info", "তিনটা চেপে দেখুন কোনটায় ওপরে ডানে ⋮ আসে")
-            val pk = Uri.parse("package:$packageName")
-            fun open(i: Intent) {
-                try { startActivity(i) } catch (e: Exception) { Toast.makeText(this, "খোলা গেল না: ${e.javaClass.simpleName}", Toast.LENGTH_LONG).show() }
-            }
-            addTo(t, ghost("A: নতুন টাস্কে") {
-                open(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, pk).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-            }, 10)
-            addTo(t, ghost("B: সেটিংসের নিজস্ব পাতা ধরে") {
-                open(Intent().setClassName("com.android.settings", "com.android.settings.Settings\$InstalledAppDetailsActivity").setData(pk))
-            }, 8)
-            addTo(t, ghost("C: পরিষ্কার টাস্কে, ইতিহাস ছাড়া") {
-                open(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, pk).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK or Intent.FLAG_ACTIVITY_NO_HISTORY))
-            }, 8)
-            addSide(t, 16)
-        }
-
         // AI স্বয়ংক্রিয় চ্যাট: নিয়ম না মিললে প্রতিষ্ঠানের তথ্য থেকে AI উত্তর দেয়
         val aiCard = card()
         val aiRow = LinearLayout(this)
