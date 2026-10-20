@@ -178,7 +178,8 @@ object Store {
         for (r in rules(c)) {
             if (!r.on) continue
             // গ্রুপের মেসেজে শুধু "গ্রুপ" চালু নিয়ম, সরাসরি (ব্যক্তির) চ্যাটে শুধু "ব্যক্তি" চালু নিয়ম
-            if (group) { if (!r.group) continue } else if (!r.person) continue
+            if (group && !r.group) continue
+            if (!group && !r.person) continue
             val hit = r.keys.split(',', '،', '\n').map { it.trim().lowercase() }.filter { it.isNotEmpty() }.any { t.contains(it) }
             if (hit) return r.reply
         }
