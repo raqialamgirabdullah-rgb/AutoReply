@@ -84,6 +84,7 @@ class DevChatActivity : Activity() {
     private val handler = Handler(Looper.getMainLooper())
     private lateinit var list: LinearLayout
     private lateinit var scroll: ScrollView
+    private lateinit var live: LinearLayout
     private lateinit var inputRow: LinearLayout
     private lateinit var input: EditText
     private var shownSig = ""
@@ -97,7 +98,7 @@ class DevChatActivity : Activity() {
     private val poll = object : Runnable {
         override fun run() {
             if (token() != null) Thread { refresh(false) }.start()
-            handler.postDelayed(this, 10000)
+            handler.postDelayed(this, 6000)
         }
     }
 
@@ -163,6 +164,14 @@ class DevChatActivity : Activity() {
         scroll.addView(list)
         root.addView(scroll, LinearLayout.LayoutParams(mp, 0, 1f))
 
+        // লাইভ অবস্থার পট্টি: এজেন্টের ধাপগুলো কোনটা চলছে, কোনটা শেষ
+        live = LinearLayout(this)
+        live.orientation = LinearLayout.VERTICAL
+        live.background = rounded(panel, 14, line)
+        live.setPadding(d(14), d(10), d(14), d(10))
+        live.visibility = View.GONE
+        root.addView(live, LinearLayout.LayoutParams(mp, wc).apply { leftMargin = d(12); rightMargin = d(12); topMargin = d(4) })
+
         // নিচের লেখার ঘর ও পাঠানোর বোতাম
         inputRow = LinearLayout(this)
         inputRow.orientation = LinearLayout.HORIZONTAL
@@ -198,7 +207,7 @@ class DevChatActivity : Activity() {
         handler.removeCallbacks(poll)
         if (token() != null) {
             Thread { refresh(true) }.start()
-            handler.postDelayed(poll, 10000)
+            handler.postDelayed(poll, 6000)
         }
     }
 
@@ -374,9 +383,108 @@ class DevChatActivity : Activity() {
             }
             val waiting = msgs.isNotEmpty() && msgs.last().mine
             sig.append(waiting)
-            runOnUiThread { draw(msgs, waiting, sig.toString(), forceScroll) }
+            val lv = try { liveRows(tok) } catch (e: Exception) { null }
+            runOnUiThread {
+                draw(msgs, waiting, sig.toString(), forceScroll)
+                drawLive(lv)
+            }
         } catch (e: Exception) {
             // নেটওয়ার্ক না থাকলে চুপ থাকে; পরের চেষ্টায় আবার হবে
+        }
+    }
+
+    private class Row(val label: String, val state: String, val color: Int)
+    private class Live(val header: String, val headerColor: Int, val rows: List<Row>)
+
+    private fun parseTime(s: String): Long = try { java.time.Instant.parse(s).toEpochMilli() } catch (e: Exception) { 0L }
+
+    private fun stepLabel(n: String): String? = when {
+        n.startsWith("Check Gemini key") -> "মডেল বাছাই"
+        n == "Run Gemini" -> "Gemini কাজ করছে"
+        n.startsWith("Auto-merge") -> "মার্জ ও বিল্ড শুরু"
+        n.startsWith("Report result") -> "রিপোর্ট"
+        else -> null
+    }
+
+    private fun stateRow(label: String, status: String, conclusion: String): Row = when {
+        status == "completed" && conclusion == "success" -> Row(label, "শেষ", accent)
+        status == "completed" && conclusion == "failure" -> Row(label, "ব্যর্থ", warn)
+        status == "completed" && conclusion == "skipped" -> Row(label, "বাদ", mute)
+        status == "completed" -> Row(label, "বন্ধ", mute)
+        status == "in_progress" -> Row(label, "চলছে…", ink)
+        else -> Row(label, "অপেক্ষা", mute)
+    }
+
+    private fun mins(ms: Long): String {
+        val s = ms / 1000
+        return if (s >= 60) "${s / 60} মি ${s % 60} সে" else "$s সে"
+    }
+
+    // GitHub Actions থেকে এজেন্টের (ও তার পরের APK বিল্ডের) ধাপ-ভিত্তিক সত্যিকারের অবস্থা আনে; টোকেনে "Actions: Read-only" লাগে
+    private fun liveRows(tok: String): Live? {
+        val rr = req(tok, "GET", "/repos/$repo/actions/workflows/gemini-agent.yml/runs?per_page=1")
+        if (rr.code == 403) return Live("লাইভ অবস্থা দেখতে টোকেনে \"Actions: Read-only\" অনুমতি যোগ করুন", warn, emptyList())
+        if (rr.code !in 200..299) return null
+        val runs = JSONObject(rr.text).optJSONArray("workflow_runs") ?: return null
+        if (runs.length() == 0) return null
+        val run = runs.getJSONObject(0)
+        val now = System.currentTimeMillis()
+        val status = run.optString("status")
+        val concl = run.optString("conclusion")
+        val started = parseTime(run.optString("run_started_at")).let { if (it == 0L) parseTime(run.optString("created_at")) else it }
+        val updated = parseTime(run.optString("updated_at"))
+        if (status == "completed" && now - updated > 10 * 60 * 1000L) return null
+        val rows = ArrayList<Row>()
+        val jr = req(tok, "GET", "/repos/$repo/actions/runs/${run.getLong("id")}/jobs")
+        if (jr.code in 200..299) {
+            val jobs = JSONObject(jr.text).optJSONArray("jobs")
+            val steps = if (jobs != null && jobs.length() > 0) jobs.getJSONObject(0).optJSONArray("steps") else null
+            if (steps != null) {
+                for (i in 0 until steps.length()) {
+                    val st = steps.getJSONObject(i)
+                    val lb = stepLabel(st.optString("name")) ?: continue
+                    rows.add(stateRow(lb, st.optString("status"), st.optString("conclusion")))
+                }
+            }
+        }
+        // মার্জের পর শুরু হওয়া APK বিল্ড
+        val br = req(tok, "GET", "/repos/$repo/actions/workflows/build-apk.yml/runs?per_page=1")
+        if (br.code in 200..299) {
+            val bruns = JSONObject(br.text).optJSONArray("workflow_runs")
+            if (bruns != null && bruns.length() > 0) {
+                val b = bruns.getJSONObject(0)
+                val bs = b.optString("status")
+                val bUpd = parseTime(b.optString("updated_at"))
+                if (parseTime(b.optString("created_at")) >= parseTime(run.optString("created_at")) && (bs != "completed" || now - bUpd < 20 * 60 * 1000L)) {
+                    rows.add(stateRow("APK বিল্ড", bs, b.optString("conclusion")))
+                }
+            }
+        }
+        val header = when {
+            status != "completed" -> "Gemini-র কাজ চলছে — ${mins(now - started)}"
+            concl == "success" -> "Gemini-র রান শেষ (${mins(updated - started)})"
+            else -> "Gemini-র রান ব্যর্থ (${mins(updated - started)})"
+        }
+        return Live(header, if (status != "completed") accent else if (concl == "success") accent else warn, rows)
+    }
+
+    private fun drawLive(lv: Live?) {
+        if (isFinishing) return
+        live.removeAllViews()
+        if (lv == null) {
+            live.visibility = View.GONE
+            return
+        }
+        live.visibility = View.VISIBLE
+        live.addView(tv(lv.header, 13f, lv.headerColor, true))
+        for (r in lv.rows) {
+            val row = LinearLayout(this)
+            row.orientation = LinearLayout.HORIZONTAL
+            row.addView(tv(r.label, 13f, ink), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            row.addView(tv(r.state, 13f, r.color, true))
+            val lp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            lp.topMargin = d(5)
+            live.addView(row, lp)
         }
     }
 
@@ -391,7 +499,8 @@ class DevChatActivity : Activity() {
             return
         }
         for (m in msgs) {
-            val t = tv(if (m.text.length > 3000) m.text.take(3000) + "…" else m.text, 14f, if (m.mine) Color.parseColor("#06201C") else ink)
+            val lim = if (m.mine) 3000 else 1200
+            val t = tv(if (m.text.length > lim) m.text.take(lim) + "…\n(বাকিটা GitHub-এ)" else m.text, 14f, if (m.mine) Color.parseColor("#06201C") else ink)
             t.setTextIsSelectable(true)
             t.setLinkTextColor(if (m.mine) Color.parseColor("#06201C") else accent)
             Linkify.addLinks(t, Linkify.WEB_URLS)
