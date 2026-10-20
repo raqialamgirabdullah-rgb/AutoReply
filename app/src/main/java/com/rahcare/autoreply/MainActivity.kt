@@ -50,6 +50,7 @@ class MainActivity : Activity() {
     private lateinit var sideSv: ScrollView
     private lateinit var scrim: View
     private lateinit var dot: View
+    private lateinit var barHolder: FrameLayout
     private var menuOpen = false
     private var pendingInstallUrl: String? = null // অনুমতি দিয়ে ফিরলে আপডেট নিজে শুরু হবে
     private var update: Updater.Info? = null
@@ -90,44 +91,16 @@ class MainActivity : Activity() {
 
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(d(16), d(4), d(16), d(40))
+            setPadding(d(16), d(12), d(16), d(100))
         }
         val sv = ScrollView(this).apply { addView(root) }
 
-        // ওপরের বার: বাঁয়ে নাম, ডানে থ্রি-লাইন মেনু
-        val bar = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(d(16), d(26), d(6), d(6))
-        }
-        val ttl = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        ttl.addView(tv("AutoReply", 26f, bold = true))
-        ttl.addView(tv("মেসেজ এলে নিজে থেকে উত্তর", 12f, mute))
-        bar.addView(ttl, LinearLayout.LayoutParams(0, wc, 1f))
-
-        val menuBtn = FrameLayout(this)
-        val lines = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(d(14), d(14), d(14), d(14))
-        }
-        for (k in 0 until 3) {
-            val b = View(this)
-            b.background = rounded(ink, 2)
-            lines.addView(b, LinearLayout.LayoutParams(d(22), d(3)).apply { if (k > 0) topMargin = d(5) })
-        }
-        menuBtn.addView(lines)
-        dot = View(this)
-        dot.background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(warn) }
-        dot.visibility = View.GONE
-        menuBtn.addView(dot, FrameLayout.LayoutParams(d(10), d(10), Gravity.TOP or Gravity.END).apply {
-            topMargin = d(8)
-            rightMargin = d(8)
-        })
-        menuBtn.setOnClickListener { if (menuOpen) closeMenu() else openMenu() }
-        bar.addView(menuBtn, LinearLayout.LayoutParams(wc, wc))
+        // ওপরের নেভিগেশন বার: বাঁয়ে মেনু, মাঝে নাম, ডানে মূল চালু/বন্ধ সুইচ (build() প্রতিবার নতুন করে আঁকে)
+        window.statusBarColor = Color.parseColor("#0E3A36")
+        barHolder = FrameLayout(this)
 
         val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        col.addView(bar, LinearLayout.LayoutParams(mp, wc))
+        col.addView(barHolder, LinearLayout.LayoutParams(mp, wc))
         col.addView(sv, LinearLayout.LayoutParams(mp, 0, 1f))
 
         // সাইডবার (ডান পাশ থেকে স্লাইড করে আসে) ও তার পেছনের আবছা পর্দা
@@ -148,9 +121,76 @@ class MainActivity : Activity() {
         }
         val frame = FrameLayout(this)
         frame.addView(col, FrameLayout.LayoutParams(mp, mp))
+        // নিচে ডানে ভাসমান + বোতাম: নতুন নিয়ম
+        val fab = TextView(this).apply {
+            text = "+"
+            textSize = 32f
+            includeFontPadding = false
+            setTextColor(Color.parseColor("#06201C"))
+            setTypeface(typeface, Typeface.BOLD)
+            gravity = Gravity.CENTER
+            background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(accent) }
+            elevation = d(6).toFloat()
+            contentDescription = "নতুন নিয়ম"
+            setOnClickListener { edit(null, Store.rules(this@MainActivity)) }
+        }
+        frame.addView(fab, FrameLayout.LayoutParams(d(58), d(58), Gravity.BOTTOM or Gravity.END).apply {
+            rightMargin = d(20)
+            bottomMargin = d(24)
+        })
         frame.addView(scrim, FrameLayout.LayoutParams(mp, mp))
-        frame.addView(sideSv, FrameLayout.LayoutParams(sideW(), mp, Gravity.END))
+        frame.addView(sideSv, FrameLayout.LayoutParams(sideW(), mp, Gravity.START))
         setContentView(frame)
+    }
+
+    // ওপরের নেভিগেশন বার
+    private fun makeBar(on: Boolean): View {
+        val wc = ViewGroup.LayoutParams.WRAP_CONTENT
+        val bar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setBackgroundColor(Color.parseColor("#0E3A36"))
+            setPadding(d(6), d(26), d(18), d(8))
+            elevation = d(4).toFloat()
+        }
+        val menuBtn = FrameLayout(this)
+        val lines = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(d(14), d(14), d(14), d(14))
+        }
+        for (k in 0 until 3) {
+            val b = View(this)
+            b.background = rounded(Color.WHITE, 2)
+            lines.addView(b, LinearLayout.LayoutParams(d(22), d(3)).apply { if (k > 0) topMargin = d(5) })
+        }
+        menuBtn.addView(lines)
+        dot = View(this)
+        dot.background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(warn) }
+        dot.visibility = View.GONE
+        menuBtn.addView(dot, FrameLayout.LayoutParams(d(10), d(10), Gravity.TOP or Gravity.END).apply {
+            topMargin = d(8)
+            rightMargin = d(8)
+        })
+        menuBtn.setOnClickListener { if (menuOpen) closeMenu() else openMenu() }
+        bar.addView(menuBtn, LinearLayout.LayoutParams(wc, wc))
+        val t = tv("AutoReply", 20f, Color.WHITE, true)
+        t.setPadding(d(6), 0, 0, 0)
+        bar.addView(t, LinearLayout.LayoutParams(0, wc, 1f))
+        bar.addView(sw(on) { v -> setMaster(v) })
+        return bar
+    }
+
+    // মূল চালু/বন্ধ: ওপরের বার ও মেনু, দুই জায়গার সুইচই এটা ব্যবহার করে
+    private fun setMaster(v: Boolean) {
+        val c = this
+        Store.setEnabled(c, v)
+        if (v) {
+            KeepAliveService.start(c)
+            Watchdog.schedule(c)
+            Watchdog.rebind(c, false)
+        } else KeepAliveService.stop(c)
+        if (v && !granted()) Toast.makeText(c, "আগে নোটিফিকেশন অ্যাক্সেস দিন", Toast.LENGTH_LONG).show()
+        handler.post { build() }
     }
 
     private fun openMenu() {
@@ -160,7 +200,7 @@ class MainActivity : Activity() {
         scrim.visibility = View.VISIBLE
         scrim.animate().alpha(1f).setDuration(180).start()
         sideSv.visibility = View.VISIBLE
-        sideSv.translationX = sideW().toFloat()
+        sideSv.translationX = -sideW().toFloat()
         sideSv.animate().translationX(0f).setDuration(200).start()
     }
 
@@ -168,7 +208,7 @@ class MainActivity : Activity() {
         if (!menuOpen) return
         menuOpen = false
         scrim.animate().alpha(0f).setDuration(160).withEndAction { if (!menuOpen) scrim.visibility = View.GONE }.start()
-        sideSv.animate().translationX(sideW().toFloat()).setDuration(180).withEndAction { if (!menuOpen) sideSv.visibility = View.GONE }.start()
+        sideSv.animate().translationX(-sideW().toFloat()).setDuration(180).withEndAction { if (!menuOpen) sideSv.visibility = View.GONE }.start()
     }
 
     @Suppress("DEPRECATION")
@@ -602,6 +642,8 @@ class MainActivity : Activity() {
         val c = this
         val ok = granted()
         val on = Store.enabled(c)
+        barHolder.removeAllViews()
+        barHolder.addView(makeBar(on))
         val up = update
         dot.visibility = View.GONE // আপডেটের কার্ড মূল পাতায় থাকে, তাই মেনুতে আলাদা লাল বিন্দু লাগে না
         val free = getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(packageName)
@@ -628,16 +670,7 @@ class MainActivity : Activity() {
         mc.addView(st)
         statusTv = st
         row.addView(mc, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        row.addView(sw(on) { v ->
-            Store.setEnabled(c, v)
-            if (v) {
-                KeepAliveService.start(c)
-                Watchdog.schedule(c)
-                Watchdog.rebind(c, false)
-            } else KeepAliveService.stop(c)
-            if (v && !granted()) Toast.makeText(c, "আগে নোটিফিকেশন অ্যাক্সেস দিন", Toast.LENGTH_LONG).show()
-            handler.post { build() }
-        })
+        row.addView(sw(on) { v -> setMaster(v) })
         main.addView(row)
         fillStatus()
         if (!ok) {
@@ -683,7 +716,6 @@ class MainActivity : Activity() {
             addTo(rb, acts, 12)
             addTo(rc, rb, 12)
         }
-        addTo(rc, primary("+ নতুন নিয়ম") { edit(null, rules) }, 14)
         add(rc, 12)
 
         // নতুন সংস্করণ এলে শুধু তখনই মূল পাতার একদম নিচে আপডেটের কার্ড দেখায়
