@@ -57,6 +57,7 @@ class MainActivity : Activity() {
     private var wantInstall = false             // আপডেট-নোটিফিকেশনে চেপে ঢুকলে সরাসরি ইনস্টল শুরু হবে
     private var statusTv: TextView? = null
     private var lastCheck = 0L
+    private lateinit var updBtn: TextView        // নিচে মাঝখানে ভাসমান আপডেট বোতাম (আপডেট থাকলেই দেখায়)
 
     private val ink = Color.parseColor("#EAF2F3")
     private val mute = Color.parseColor("#8FA3A8")
@@ -137,6 +138,22 @@ class MainActivity : Activity() {
         frame.addView(fab, FrameLayout.LayoutParams(d(58), d(58), Gravity.BOTTOM or Gravity.END).apply {
             rightMargin = d(20)
             bottomMargin = d(24)
+        })
+        // নিচে মাঝখানে ভাসমান আপডেট বোতাম, + বোতামের সমান লাইনে
+        updBtn = TextView(this).apply {
+            text = "↓  আপডেট করুন"
+            textSize = 15f
+            includeFontPadding = false
+            setTextColor(Color.parseColor("#06201C"))
+            setTypeface(typeface, Typeface.BOLD)
+            gravity = Gravity.CENTER
+            background = rounded(accent, 26)
+            setPadding(d(26), 0, d(26), 0)
+            elevation = d(6).toFloat()
+            visibility = View.GONE
+        }
+        frame.addView(updBtn, FrameLayout.LayoutParams(wc, d(52), Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply {
+            bottomMargin = d(27)
         })
         frame.addView(scrim, FrameLayout.LayoutParams(mp, mp))
         frame.addView(sideSv, FrameLayout.LayoutParams(sideW(), mp, Gravity.START))
@@ -681,12 +698,12 @@ class MainActivity : Activity() {
 
         // ========== মূল পাতা: ফাঁকা; নতুন নিয়ম যোগের জন্য শুধু ভাসমান + বোতাম ==========
 
-        // নতুন সংস্করণ এলে শুধু তখনই মূল পাতার একদম নিচে আপডেটের কার্ড দেখায়
+        // নতুন সংস্করণ এলে শুধু তখনই নিচে মাঝখানে "আপডেট করুন" বোতাম দেখায় (কোনো কার্ড নয়)
         if (up != null) {
-            val u = card(accent)
-            title(u, "নতুন সংস্করণ এসেছে (${up.v})", "একবার চাপলেই ডাউনলোড ও ইনস্টল শুরু হবে।")
-            addTo(u, primary("আপডেট করুন") { install(up.url) }, 12)
-            add(u, 12)
+            updBtn.setOnClickListener { install(up.url) }
+            updBtn.visibility = View.VISIBLE
+        } else {
+            updBtn.visibility = View.GONE
         }
 
         // ========== সাইডবারের বাকি অংশ ==========
