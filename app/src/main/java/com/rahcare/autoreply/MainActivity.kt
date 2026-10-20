@@ -1045,14 +1045,14 @@ class MainActivity : Activity() {
         box.addView(k)
         box.addView(rp)
         // নিচের সারি: বাঁয়ে "গ্রুপ" ও "ব্যক্তি" সুইচ, ডানে বাতিল ও সংরক্ষণ
-        fun cell(label: String, on: Boolean): Pair<LinearLayout, Switch> {
+        fun cell(label: String, on: Boolean): Pair<LinearLayout, BooleanArray> {
             val l = LinearLayout(this)
             l.orientation = LinearLayout.VERTICAL
             l.gravity = Gravity.CENTER_HORIZONTAL
             l.addView(tv(label, 12f, mute, true))
-            val s2 = sw(on) {}
-            l.addView(s2)
-            return Pair(l, s2)
+            val st = booleanArrayOf(on)
+            l.addView(sw(on) { st[0] = it })
+            return Pair(l, st)
         }
         val gCell = cell("গ্রুপ", r?.group ?: false)
         val pCell = cell("ব্যক্তি", r?.person ?: true)
@@ -1078,8 +1078,8 @@ class MainActivity : Activity() {
         save.setOnClickListener {
             val ks = k.text.toString().trim()
             val rs = rp.text.toString().trim()
-            val g = gCell.second.isChecked
-            val p = pCell.second.isChecked
+            val g = gCell.second[0]
+            val p = pCell.second[0]
             if (ks.isEmpty() || rs.isEmpty()) return@setOnClickListener
             if (!g && !p) {
                 Toast.makeText(this, "\"গ্রুপ\" বা \"ব্যক্তি\"-র অন্তত একটা চালু রাখুন", Toast.LENGTH_SHORT).show()
