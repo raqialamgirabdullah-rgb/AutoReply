@@ -691,8 +691,6 @@ class MainActivity : Activity() {
         // উত্তরের নিয়ম
         val rules = Store.rules(c)
         val rc = section()
-        title(rc, "উত্তরের নিয়ম")
-        bullets(rc, listOf("গ্রুপ চ্যাটে উত্তর যায় না"), 6)
         for (r in rules) {
             val rb = LinearLayout(this)
             rb.orientation = LinearLayout.VERTICAL
@@ -715,6 +713,17 @@ class MainActivity : Activity() {
             rb.addView(top)
             val acts = LinearLayout(this)
             acts.orientation = LinearLayout.HORIZONTAL
+            acts.gravity = Gravity.CENTER_VERTICAL
+            // কার্ডের বাঁ দিকে "গ্রুপ" সুইচ: চালু থাকলে এই নিয়ম গ্রুপ চ্যাটের মেসেজেও উত্তর দেবে
+            val gp = LinearLayout(this)
+            gp.orientation = LinearLayout.HORIZONTAL
+            gp.gravity = Gravity.CENTER_VERTICAL
+            gp.addView(tv("গ্রুপ", 13f, mute, true), LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { rightMargin = d(6) })
+            gp.addView(sw(r.group) { v ->
+                r.group = v
+                Store.saveRules(c, rules)
+            })
+            acts.addView(gp, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { rightMargin = d(10) })
             acts.addView(ghost("সম্পাদনা") { edit(r, rules) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { rightMargin = d(8) })
             acts.addView(ghost("মুছুন", warn) {
                 rules.remove(r)

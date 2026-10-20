@@ -4,7 +4,7 @@ import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
 
-class Rule(var keys: String, var reply: String, var on: Boolean = true)
+class Rule(var keys: String, var reply: String, var on: Boolean = true, var group: Boolean = false)
 
 object Store {
     // নতুন অ্যাপ যোগ করতে এই তালিকায় একটা লাইন বাড়ালেই হবে (প্যাকেজ নাম to দেখানোর নাম)
@@ -161,21 +161,23 @@ object Store {
         val a = JSONArray(s)
         return MutableList(a.length()) {
             val o = a.getJSONObject(it)
-            Rule(o.getString("k"), o.getString("r"), o.optBoolean("on", true))
+            Rule(o.getString("k"), o.getString("r"), o.optBoolean("on", true), o.optBoolean("g", false))
         }
     }
 
     fun saveRules(c: Context, l: List<Rule>) {
         val a = JSONArray()
-        l.forEach { a.put(JSONObject().put("k", it.keys).put("r", it.reply).put("on", it.on)) }
+        l.forEach { a.put(JSONObject().put("k", it.keys).put("r", it.reply).put("on", it.on).put("g", it.group)) }
         p(c).edit().putString("rules", a.toString()).apply()
     }
 
     // মেসেজে কোনো নিয়মের শব্দ থাকলে সেই নিয়মের উত্তর ফেরত দেয়; ওপরের নিয়ম আগে মেলে
-    fun match(c: Context, text: String): String? {
+    // group=true হলে (গ্রুপ চ্যাটের মেসেজ) শুধু যেসব নিয়মে "গ্রুপ" সুইচ চালু আছে সেগুলো মেলানো হয়
+    fun match(c: Context, text: String, group: Boolean = false): String? {
         val t = text.lowercase()
         for (r in rules(c)) {
             if (!r.on) continue
+            if (group && !r.group) continue
             val hit = r.keys.split(',', '،', '\n').map { it.trim().lowercase() }.filter { it.isNotEmpty() }.any { t.contains(it) }
             if (hit) return r.reply
         }

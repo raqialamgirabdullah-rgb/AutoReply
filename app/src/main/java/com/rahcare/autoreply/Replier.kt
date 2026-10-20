@@ -62,20 +62,18 @@ object Replier {
         if (!Store.enabled(c)) { log(c, pkg, uid, sender, text, "মূল সুইচ বন্ধ"); return }
         if (!Store.instOn(c, pkg, uid)) { log(c, pkg, uid, sender, text, "এই অ্যাপ বন্ধ করা আছে"); return }
 
-        // গ্রুপ চ্যাটে উত্তর পাঠানো হবে না
+        // গ্রুপ চ্যাট চেনা: এখানে থামানো হয় না; শুধু যে নিয়মে "গ্রুপ" সুইচ চালু আছে সেটাই গ্রুপে উত্তর দেয় (নিচে match-এ)
         val title = ex.getCharSequence("android.conversationTitle")?.toString()
-        if (ex.getBoolean("android.isGroupConversation") || (title != null && title != sender)) {
-            log(c, pkg, uid, sender, text, "গ্রুপ ধরা হয়েছে, তাই বাদ (title=$title)")
-            return
-        }
+        var isGroup = ex.getBoolean("android.isGroupConversation") || (title != null && title != sender)
 
         // টেলিগ্রামের চ্যানেল, গ্রুপ ও বটে উত্তর পাঠানো হবে না (শুধু ব্যক্তির সাথে সরাসরি চ্যাটে)
         if (Store.grp(pkg) == "Telegram") {
             val cid = (n.channelId ?: "").lowercase()
-            if (cid.contains("channel") || cid.contains("group") || sender.trim().lowercase().endsWith("bot")) {
-                log(c, pkg, uid, sender, text, "টেলিগ্রামের চ্যানেল/গ্রুপ/বট, তাই বাদ (channelId=$cid)")
+            if (cid.contains("channel") || sender.trim().lowercase().endsWith("bot")) {
+                log(c, pkg, uid, sender, text, "টেলিগ্রামের চ্যানেল/বট, তাই বাদ (channelId=$cid)")
                 return
             }
+            if (cid.contains("group")) isGroup = true
         }
 
         if (!catchUp) {
@@ -102,7 +100,8 @@ object Replier {
         if (text in sent) return // এটা আমাদেরই পাঠানো উত্তর
 
         // আগে নিয়ম; কোনো নিয়ম না মিললে (এবং AI চালু ও সাজানো থাকলে) AI
-        val reply = Store.match(c, text)
+        val reply = Store.match(c, text, isGroup)
+        if (isGroup && reply == null) { log(c, pkg, uid, sender, text, "গ্রুপ ধরা হয়েছে, তাই বাদ (কোনো নিয়মে গ্রুপ সুইচ চালু নেই, title=$title)"); return }
         if (reply == null && !Ai.ready(c)) { log(c, pkg, uid, sender, text, "কোনো নিয়ম মেলেনি"); return }
 
         val acts = n.actions
