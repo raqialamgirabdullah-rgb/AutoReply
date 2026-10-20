@@ -20,7 +20,7 @@ object Store {
     private fun p(c: Context) = c.getSharedPreferences("s", Context.MODE_PRIVATE)
     fun sp(c: Context) = p(c)
 
-    fun enabled(c: Context) = p(c).getBoolean("on", false)
+    fun enabled(c: Context) = p(c).getBoolean("on", true) // ডিফল্টভাবে চালু; ব্যবহারকারী চাইলে ম্যানুয়ালি বন্ধ করতে পারে
     fun setEnabled(c: Context, v: Boolean) = p(c).edit().putBoolean("on", v).apply()
 
     // পুরোনো (শুধু প্যাকেজ ধরে) চালু/বন্ধ — আগের সেটিং যেন হারিয়ে না যায়
