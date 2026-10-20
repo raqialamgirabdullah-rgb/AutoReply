@@ -693,14 +693,24 @@ class MainActivity : Activity() {
             if (tried) "Restricted settings অনুমতি দিন" else label, warn
         ) {
             if (tried) {
-                Store.sp(this).edit().putString("info_for", key).apply()
-                // App info সরাসরি খুললে অনেক ফোনে ⋮ মেনু আসে না; ফোনের নিজের অ্যাপ তালিকা থেকে খুললে আসে — তাই তালিকা খোলা হয়
-                Toast.makeText(this, "তালিকায় \"Auto Reply\" খুঁজে চাপুন, ওপরে ডানে ⋮ চেপে \"Allow restricted settings\" দিন, তারপর ফিরে আসুন", Toast.LENGTH_LONG).show()
-                try {
-                    startActivity(Intent(Settings.ACTION_MANAGE_ALL_APPLICATIONS_SETTINGS))
-                } catch (e: Exception) {
-                    startActivity(Intent(Settings.ACTION_MANAGE_APPLICATIONS_SETTINGS))
-                }
+                // অ্যাপ থেকে App info খুললে ⋮ মেনু আসে না; আইকনে চেপে ধরে ⓘ চাপলে আসে (পরীক্ষায় দেখা গেছে), তাই সেই পথ বলা হয়
+                AlertDialog.Builder(this)
+                    .setTitle("Restricted settings অনুমতি")
+                    .setMessage("১. অ্যাপের আইকনে চেপে ধরুন (হোম স্ক্রিন বা অ্যাপ ড্রয়ারে)\n২. App info (ⓘ) চাপুন\n৩. ওপরে ডানে ⋮ চেপে \"Allow restricted settings\" দিন\n৪. তারপর AutoReply-এ ফিরে আসুন, সেটিংস পাতা নিজে খুলে যাবে")
+                    .setPositiveButton("হোম স্ক্রিনে যান") { _, _ ->
+                        Store.sp(this).edit().putString("info_for", key).apply()
+                        startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    }
+                    .setNeutralButton("অ্যাপ তালিকা খুলুন") { _, _ ->
+                        Store.sp(this).edit().putString("info_for", key).apply()
+                        try {
+                            startActivity(Intent(Settings.ACTION_MANAGE_ALL_APPLICATIONS_SETTINGS))
+                        } catch (e: Exception) {
+                            startActivity(Intent(Settings.ACTION_MANAGE_APPLICATIONS_SETTINGS))
+                        }
+                    }
+                    .setNegativeButton("বাতিল", null)
+                    .show()
             } else {
                 Store.sp(this).edit().putBoolean("try_$key", true).apply()
                 startActivity(Intent(settings))
