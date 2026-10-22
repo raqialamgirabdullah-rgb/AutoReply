@@ -968,11 +968,6 @@ class MainActivity : Activity() {
         // অ্যাপ/কপির তালিকা (দুই কলামের গ্রিড)
         val apps = section()
         title(apps, "কোন অ্যাপে চলবে")
-        bullets(apps, listOf(
-            "ফোনে থাকা মেসেজিং ও সোশ্যাল অ্যাপগুলো এখানে দেখা যায়; প্রতিটি আলাদা করে চালু বা বন্ধ করা যায়",
-            "নতুন অ্যাপ প্রথমে বন্ধ থাকে। শুধু যেগুলোর নোটিফিকেশনে Reply বাটন আছে, সেগুলোতেই উত্তর যায়",
-            "WhatsApp, Facebook, Telegram-এ চাপলে ওই অ্যাপের সব ভেরিয়েন্ট (Business, ক্লোন...) আলাদা সুইচসহ দেখা যায়"
-        ), 6)
         val cells = ArrayList<View>()
         val fmt = SimpleDateFormat("dd MMM HH:mm", Locale.US)
         val shownG = HashSet<String>()
@@ -1029,7 +1024,7 @@ class MainActivity : Activity() {
         vt.maxLines = 1
         vt.setAutoSizeTextTypeUniformWithConfiguration(10, 15, 1, android.util.TypedValue.COMPLEX_UNIT_SP)
         vrow.addView(vt, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { rightMargin = d(10) })
-        vrow.addView(ghost("শেয়ার") { shareApp() }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        vrow.addView(ghost("Share") { shareApp() }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         addTo(ver, vrow, 0)
         addSide(ver, 14)
     }
@@ -1308,15 +1303,15 @@ class MainActivity : Activity() {
         }
         val k = field(hintFor(md[0]), r?.keys ?: "")
         val modes = listOf(
-            Triple(Store.M_EXACT, "হুবহু মিল (Exact match)",
+            Triple(Store.M_EXACT, "Exact match",
                 "পুরো মেসেজটা আপনার লেখা মেসেজগুলোর কোনো একটার সাথে হুবহু এক হতে হবে। বড়-ছোট হাতের অক্ষর, বাড়তি ফাঁকা এবং চিহ্ন (! ? । .) ধরা হয় না।\n\nউদাহরণ: \"assalamu alaikum\" লিখলে \"Assalamu Alaikum!\" মিলবে, কিন্তু \"করিম রহিমকে assalamu alaikum বলেছে\" মিলবে না।"),
-            Triple(Store.M_SIMILAR, "কাছাকাছি মিল (Similarity match)",
+            Triple(Store.M_SIMILAR, "Similarity match",
                 "পুরো মেসেজটা আপনার লেখা কোনো মেসেজের সাথে প্রায় ৮০% মিললেই হবে, তাই ছোটখাটো বানান ভুল থাকলেও মিলে যাবে।\n\nউদাহরণ: \"assalamualaikum\" লিখলে \"assalamu alaikum\" মিলবে।"),
-            Triple(Store.M_PATTERN, "প্যাটার্ন মিল (Pattern matching)",
+            Triple(Store.M_PATTERN, "Pattern matching",
                 "যেকোনো লেখার জায়গায় * ব্যবহার করুন। পুরো মেসেজটা প্যাটার্নের সাথে মিলতে হবে।\n\n\"hello*\" লিখলে যে মেসেজ hello দিয়ে শুরু হয় সেটা মিলবে।\n\"*price*\" লিখলে যে মেসেজে price শব্দটা আছে সেটা মিলবে।"),
-            Triple(Store.M_REGEX, "বিশেষজ্ঞ প্যাটার্ন (RegEx)",
+            Triple(Store.M_REGEX, "RegEx",
                 "রেগুলার এক্সপ্রেশন (RegEx) লিখুন, প্রতি লাইনে একটি। মেসেজের যেকোনো জায়গায় মিললেই কাজ করবে; পুরো মেসেজ মেলাতে চাইলে ^ ও \$ ব্যবহার করুন।"),
-            Triple(Store.M_CONTAINS, "শব্দ থাকলেই (Contains)",
+            Triple(Store.M_CONTAINS, "Contains",
                 "মেসেজের যেকোনো জায়গায় আপনার লেখা কোনো শব্দ থাকলেই মিলবে (আগের নিয়ম)। \"hi\"-এর মতো ছোট ইংরেজি শব্দ আলাদা শব্দ হিসেবে থাকতে হবে।")
         )
         val dots = ArrayList<RadioDot>()
