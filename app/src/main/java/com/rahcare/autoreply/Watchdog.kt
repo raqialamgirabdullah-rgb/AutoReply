@@ -56,7 +56,7 @@ class WatchdogReceiver : BroadcastReceiver() {
         val pr = goAsync()
         val app = c.applicationContext
         Thread {
-            try { Updater.checkAndNotify(app, 3 * 60 * 60 * 1000L) } catch (e: Exception) {} finally { pr.finish() }
+            try { Updater.backgroundCheck(app, 20 * 60 * 1000L) } catch (e: Exception) {} finally { pr.finish() }
         }.start()
     }
 }

@@ -277,6 +277,7 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        Updater.fg = true
         Store.log(this) // অ্যাপ খুললেই পুরোনো লগের (মেসেজের লেখাসহ) বাকি অংশ মুছে যায়
         if (updStage == 2) resetUpd() // ইনস্টল নিশ্চিতকরণের পর্দা থেকে ফিরলে (বাতিল করলে) বোতাম আগের অবস্থায়
         // App info থেকে ফিরলে (ব্যবহারকারীর নিজের চাপের পরে) একবার সংশ্লিষ্ট সেটিংস পাতা আবার খুলে দেয়
@@ -307,6 +308,7 @@ class MainActivity : Activity() {
 
     override fun onPause() {
         super.onPause()
+        Updater.fg = false
         handler.removeCallbacks(ticker)
     }
 
@@ -325,6 +327,11 @@ class MainActivity : Activity() {
                 if (wantInstall) {
                     wantInstall = false
                     if (u != null) install(u.url)
+                } else if (u != null && Store.sp(this).getInt("fg_auto_v", 0) != u.v && !updBusy && packageManager.canRequestPackageInstalls()) {
+                    // অ্যাপ খোলা অবস্থায় নতুন সংস্করণ এলে বোতাম না চাপলেও নিজে থেকে শুরু হয় (প্রতি সংস্করণে একবারই;
+                    // বাতিল করলে আবার জিজ্ঞেস করে না, তখন বোতাম ব্যবহার করুন)
+                    Store.sp(this).edit().putInt("fg_auto_v", u.v).apply()
+                    install(u.url, auto = true)
                 }
             }
         }.start()
@@ -388,9 +395,11 @@ class MainActivity : Activity() {
         animUpdWidth(updBtn.measuredWidth, true)
     }
 
-    // APK নামিয়ে PackageInstaller দিয়ে ইনস্টল করে; ফোন নিশ্চিত করার পর্দা দেখাবে
-    private fun install(url: String) {
+    // APK নামিয়ে PackageInstaller দিয়ে ইনস্টল করে। auto = true হলে (নিজে থেকে শুরু) নীরব ইনস্টল চেষ্টা হয়;
+    // বোতাম চাপলে সবসময় নিশ্চিত-পর্দাসহ নির্ভরযোগ্য পথ (কিছু ফোন নীরব ইনস্টল আটকে INSTALL_FAILED_ABORTED দেয়)
+    private fun install(url: String, auto: Boolean = false) {
         if (!packageManager.canRequestPackageInstalls()) {
+            if (auto) return // নিজে থেকে চেষ্টায় সেটিংস-পর্দা জোর করে খোলা হয় না
             // অনুমতি দিয়ে ফিরে এলেই আপডেট নিজে থেকে শুরু হবে (আবার চাপতে হবে না)
             pendingInstallUrl = url
             Toast.makeText(this, "পরের পর্দায় \"Allow from this source\" চালু করে ফিরে আসুন — আপডেট নিজেই শুরু হবে", Toast.LENGTH_LONG).show()
@@ -399,51 +408,23 @@ class MainActivity : Activity() {
         }
         if (updBusy) return
         startUpd() // আলাদা লেখা নয়: আপডেট বোতামটাই প্রগ্রেস বার হয়ে যায়
+        // আপডেটের পর অ্যাপ আবার খুলে দেওয়ার চেষ্টার জন্য চিহ্ন (BootReceiver → Updater.afterUpdate)
+        Store.sp(this).edit().putBoolean("reopen", true).apply()
+        val app = applicationContext
+        // অ্যাপ সামনে খোলা থাকলে নিশ্চিত-পর্দাই স্বাভাবিক, তাই এখানে নীরব চেষ্টা নয় (নীরব চেষ্টা ব্যাকগ্রাউন্ডে Watchdog করে)
+        val silent = false
         Thread {
-            val inst = packageManager.packageInstaller
-            val p = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)
-            if (Build.VERSION.SDK_INT >= 31) p.setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_REQUIRED) // নীরব ইনস্টল চাওয়া হয় না: কিছু ফোন সেটা আটকে INSTALL_FAILED_ABORTED দেয়
-            val id = inst.createSession(p)
             try {
-                val s = inst.openSession(id)
-                val cn = URL(url).openConnection() as HttpURLConnection
-                cn.connectTimeout = 15000
-                cn.readTimeout = 30000
-                if (cn.responseCode != 200) throw Exception("HTTP ${cn.responseCode}")
-                val total = cn.contentLengthLong
-                cn.inputStream.use { ins ->
-                    s.openWrite("a", 0, -1).use { out ->
-                        val buf = ByteArray(32 * 1024)
-                        var done = 0L
-                        var last = -1
-                        while (true) {
-                            val n = ins.read(buf)
-                            if (n < 0) break
-                            out.write(buf, 0, n)
-                            done += n
-                            if (total > 0) {
-                                val pct = (done * 100 / total).toInt().coerceIn(0, 100)
-                                if (pct != last) {
-                                    last = pct
-                                    runOnUiThread { setUpd(pct, "Downloading… $pct%") }
-                                }
-                            }
+                Updater.installNow(app, url, silent,
+                    { pct -> runOnUiThread { setUpd(pct, "Downloading… $pct%") } },
+                    {
+                        runOnUiThread {
+                            updStage = 2
+                            setUpd(100, "Installing…")
+                            handler.postDelayed({ if (updStage == 2) resetUpd() }, 60000L)
                         }
-                        s.fsync(out)
-                    }
-                }
-                val pi = PendingIntent.getBroadcast(
-                    this, id, Intent(this, UpdateReceiver::class.java),
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
-                )
-                runOnUiThread {
-                    updStage = 2
-                    setUpd(100, "Installing…")
-                    handler.postDelayed({ if (updStage == 2) resetUpd() }, 60000L)
-                }
-                s.commit(pi.intentSender)
+                    })
             } catch (e: Exception) {
-                try { inst.abandonSession(id) } catch (x: Exception) {}
                 runOnUiThread { resetUpd(); Toast.makeText(this, "ডাউনলোড বা ইনস্টল শুরু করা গেল না (${e.javaClass.simpleName}: ${e.message?.take(70)}) — নিচের ব্রাউজার বোতামটা ব্যবহার করুন", Toast.LENGTH_LONG).show() }
             }
         }.start()
