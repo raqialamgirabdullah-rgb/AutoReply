@@ -24,6 +24,34 @@ object Store {
         "org.telegram.messenger" to "Telegram"
     )
 
+    // ফোনে থাকলে "কোন অ্যাপে চলবে" তালিকায় আসা চেনা মেসেজিং/সোশ্যাল অ্যাপ (প্যাকেজ → নাম)।
+    // প্রতিটির আলাদা সুইচ, ডিফল্টে বন্ধ: ব্যবহারকারী চালু করলে তবেই উত্তর যায়।
+    // উত্তর যেতে হলে অ্যাপের নোটিফিকেশনে Reply বাটন থাকতে হয় (সব অ্যাপে থাকে না)।
+    // নতুন অ্যাপ যোগ করতে এখানে একটা লাইন বাড়ালেই হবে। ফোনের নিজের "সোশ্যাল" বিভাগের অ্যাপও (এই তালিকায় না থাকলেও) দেখানো হয়।
+    val KNOWN_CHAT = linkedMapOf(
+        "com.instagram.android" to "Instagram",
+        "com.viber.voip" to "Viber",
+        "org.thoughtcrime.securesms" to "Signal",
+        "com.skype.raider" to "Skype",
+        "jp.naver.line.android" to "LINE",
+        "com.tencent.mm" to "WeChat",
+        "com.discord" to "Discord",
+        "com.snapchat.android" to "Snapchat",
+        "com.Slack" to "Slack",
+        "com.microsoft.teams" to "Microsoft Teams",
+        "com.google.android.apps.messaging" to "Messages",
+        "com.samsung.android.messaging" to "Samsung Messages",
+        "com.google.android.apps.dynamite" to "Google Chat",
+        "com.twitter.android" to "X",
+        "com.linkedin.android" to "LinkedIn",
+        "com.kakao.talk" to "KakaoTalk",
+        "com.zing.zalo" to "Zalo",
+        "im.thebot.messenger" to "Botim",
+        "im.vector.app" to "Element",
+        "org.thunderdog.challegram" to "Telegram X",
+        "com.facebook.mlite" to "Messenger Lite"
+    )
+
     private fun p(c: Context) = c.getSharedPreferences("s", Context.MODE_PRIVATE)
     fun sp(c: Context) = p(c)
 

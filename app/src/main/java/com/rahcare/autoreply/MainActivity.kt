@@ -8,6 +8,7 @@ import android.Manifest
 import android.app.PendingIntent
 import android.content.ComponentName
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageInstaller
 import android.content.res.ColorStateList
 import android.animation.ArgbEvaluator
@@ -967,27 +968,51 @@ class MainActivity : Activity() {
         // অ্যাপ/কপির তালিকা (দুই কলামের গ্রিড)
         val apps = section()
         title(apps, "কোন অ্যাপে চলবে")
-        bullets(apps, listOf("প্রতিটি অ্যাপ আলাদা করে চালু বা বন্ধ করা যায়", "নামে চাপলে ওই অ্যাপের সব ভেরিয়েন্ট (Business, ক্লোন...) আলাদা সুইচসহ দেখা যায়"), 6)
+        bullets(apps, listOf(
+            "ফোনে থাকা মেসেজিং ও সোশ্যাল অ্যাপগুলো এখানে দেখা যায়; প্রতিটি আলাদা করে চালু বা বন্ধ করা যায়",
+            "নতুন অ্যাপ প্রথমে বন্ধ থাকে। শুধু যেগুলোর নোটিফিকেশনে Reply বাটন আছে, সেগুলোতেই উত্তর যায়",
+            "WhatsApp, Facebook, Telegram-এ চাপলে ওই অ্যাপের সব ভেরিয়েন্ট (Business, ক্লোন...) আলাদা সুইচসহ দেখা যায়"
+        ), 6)
         val cells = ArrayList<View>()
         val fmt = SimpleDateFormat("dd MMM HH:mm", Locale.US)
         val shownG = HashSet<String>()
         for (pkg in Store.APPS.keys) {
             val g = Store.grp(pkg) ?: continue
             if (!shownG.add(g)) continue
-            cells.add(swCell(g, listOf("ভেরিয়েন্ট দেখুন ›"), Store.grpOn(c, g), { variantsDialog(g) }, groupIcon(g)) { v -> Store.setGrpOn(c, g, v) })
+            if (variantsOf(g).isEmpty()) continue // এই ফোনে নেই, তাই দেখানো হয় না
+            cells.add(swCell(g, emptyList(), Store.grpOn(c, g), { variantsDialog(g) }, groupIcon(g)) { v -> Store.setGrpOn(c, g, v) })
         }
+
+        // ফোনে থাকা অন্য মেসেজিং/সোশ্যাল অ্যাপ: আমাদের চেনা তালিকার অ্যাপ + ফোনের নিজের "সোশ্যাল" বিভাগের অ্যাপ
         val shown = HashSet<String>()
+        @Suppress("DEPRECATION")
+        val launchers = try {
+            packageManager.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0)
+        } catch (e: Exception) { emptyList() }
+        val others = ArrayList<Pair<String, String>>()
+        for (ri in launchers) {
+            val pkg = ri.activityInfo.packageName
+            if (pkg == packageName || Store.grp(pkg) != null || Store.ignored(pkg) || pkg == "com.facebook.katana") continue
+            val social = Store.KNOWN_CHAT.containsKey(pkg) || ri.activityInfo.applicationInfo.category == ApplicationInfo.CATEGORY_SOCIAL
+            if (!social || others.any { it.first == pkg }) continue
+            val label = try { ri.loadLabel(packageManager).toString() } catch (e: Exception) { Store.KNOWN_CHAT[pkg] ?: pkg }
+            others.add(pkg to label)
+        }
+        others.sortBy { it.second.lowercase() }
+        for ((pkg, label) in others) {
+            shown.add("$pkg@0")
+            cells.add(swCell(label, emptyList(), Store.instOn(c, pkg, 0), icon = appIcon(listOf(pkg), label, 40)) { v -> Store.setInstOn(c, pkg, 0, v) })
+        }
+
+        // নোটিফিকেশন-ওয়ালা অন্য কপি/অচেনা অ্যাপ (ডুয়াল অ্যাপ, ওয়ার্ক প্রোফাইল ইত্যাদি) যেগুলো ওপরে আসেনি
         for (i in Store.insts(c)) {
             if (Store.grp(i.pkg) != null || "${i.pkg}@${i.uid}" in shown) continue
             shown.add("${i.pkg}@${i.uid}")
-            // অচেনা অ্যাপ: নাম (পেলে), প্যাকেজ, ইউজার ও শেষ নোটিফিকেশনের সময়সহ
             val nm = try { packageManager.getApplicationLabel(packageManager.getApplicationInfo(i.pkg, 0)).toString() } catch (e: Exception) { "" }
             val det = ArrayList<String>()
-            if (nm.isNotBlank()) det.add(nm)
-            det.add(i.pkg)
             if (i.uid != 0) det.add("ইউজার ${i.uid}")
-            det.add(fmt.format(Date(i.t)))
-            cells.add(swCell("অচেনা অ্যাপ", det, Store.instOn(c, i.pkg, i.uid), icon = appIcon(listOf(i.pkg), nm.ifBlank { i.pkg.substringAfterLast('.') }, 40)) { v -> Store.setInstOn(c, i.pkg, i.uid, v) })
+            val shownName = nm.ifBlank { i.pkg.substringAfterLast('.') }
+            cells.add(swCell(shownName, det, Store.instOn(c, i.pkg, i.uid), icon = appIcon(listOf(i.pkg), shownName, 40)) { v -> Store.setInstOn(c, i.pkg, i.uid, v) })
         }
         grid(apps, cells, 12, 3)
         addSide(apps, 14)
@@ -996,11 +1021,16 @@ class MainActivity : Activity() {
         val ver = card()
         @Suppress("DEPRECATION")
         val vName = packageManager.getPackageInfo(packageName, 0).versionName ?: "1.0"
-        // সংস্করণের লেখা কার্ডের মাঝখানে
-        val vt = tv("Version $vName.${Updater.curVer(c)}", 17f, bold = true)
-        vt.gravity = Gravity.CENTER
-        addTo(ver, vt, 0)
-        addTo(ver, ghost("Auto Reply শেয়ার করুন") { shareApp() }, 12)
+        // এক লাইনে: "Auto Reply v1.0.N" এবং পাশে শেয়ার বাটন
+        val vrow = LinearLayout(this)
+        vrow.orientation = LinearLayout.HORIZONTAL
+        vrow.gravity = Gravity.CENTER_VERTICAL
+        val vt = tv("Auto Reply v$vName.${Updater.curVer(c)}", 15f, bold = true)
+        vt.maxLines = 1
+        vt.setAutoSizeTextTypeUniformWithConfiguration(10, 15, 1, android.util.TypedValue.COMPLEX_UNIT_SP)
+        vrow.addView(vt, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { rightMargin = d(10) })
+        vrow.addView(ghost("শেয়ার") { shareApp() }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        addTo(ver, vrow, 0)
         addSide(ver, 14)
     }
 
