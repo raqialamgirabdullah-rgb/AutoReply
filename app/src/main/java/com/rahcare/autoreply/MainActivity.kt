@@ -846,8 +846,6 @@ class MainActivity : Activity() {
         // অনুমতি: শুধু যেগুলো বাকি আছে সেগুলোর বোতাম দেখায়; সব ঠিক থাকলে কার্ডটাই থাকে না।
         // শক্তিশালী ব্যাকগ্রাউন্ড মোড সবসময় চালু (আলাদা সুইচ নেই)
         val missing = ArrayList<View>()
-        val extras = ArrayList<View>()          // বাড়তি সেটিং: শুধু সমস্যা ধরা পড়লে দেখায়
-        val needSet = Store.need(c)
         // ধাপ ১: প্রথম চাপে সরাসরি সেটিংস; ব্লক থাকলে ফিরে এলে বোতামটা "Restricted settings অনুমতি দিন" হয়ে App info খোলে;
         // App info থেকে ফিরলে অ্যাপ নিজে আবার ওই সেটিংস পাতা খুলে দেয় (onResume দেখুন)
         fun gate(label: String, key: String, tried: Boolean, settings: String) = ghost(
@@ -872,7 +870,7 @@ class MainActivity : Activity() {
         if (a11yOn()) Store.sp(this).edit().remove("try_a11y").apply()
         if (!ok) missing.add(gate("নোটিফিকেশন অ্যাক্সেস দিন", "notif", Store.sp(this).getBoolean("try_notif", false), Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
         if (!a11yOn()) missing.add(gate("Accessibility চালু করুন", "a11y", Store.sp(this).getBoolean("try_a11y", false), Settings.ACTION_ACCESSIBILITY_SETTINGS))
-        if (!free && "battery" in needSet) extras.add(ghost("ব্যাটারি সেভার বাদ দিন", warn) {
+        if (!free) missing.add(ghost("ব্যাটারি সেভার বাদ দিন", warn) {
             try {
                 startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName")))
             } catch (e: Exception) {
@@ -880,28 +878,21 @@ class MainActivity : Activity() {
             }
         })
         // Auto-start চালু আছে কি না ফোন থেকে জানা যায় না, তাই একবার চাপলেই তালিকা থেকে সরে যায়
-        if (!Store.flag(this, "s_auto") && "auto" in needSet) {
-            extras.add(ghost("Auto-start অনুমতি", warn) {
+        if (!Store.flag(this, "s_auto")) {
+            missing.add(ghost("Auto-start অনুমতি", warn) {
                 Store.setFlag(this, "s_auto")
                 openAutostart()
             })
         }
-        dot.visibility = if (missing.isNotEmpty() || (needSet.isNotEmpty() && extras.isNotEmpty())) View.VISIBLE else View.GONE // মেনুর লাল বিন্দু: মূল অনুমতি বাকি বা সমস্যা ধরা পড়েছে
+        dot.visibility = if (missing.isNotEmpty()) View.VISIBLE else View.GONE // মেনুর লাল বিন্দু: কোনো অনুমতি বাকি আছে
         if (missing.isNotEmpty()) {
             val perm = card(warn)
-            title(perm, "অনুমতি বাকি আছে", "প্রথমে এগুলো চালু করুন")
+            title(perm, "অনুমতি বাকি আছে", "এগুলো চালু করুন")
             grid(perm, missing, 12)
             addSide(perm, 16)
         }
 
-        // বাড়তি সেটিং (শুধু সমস্যা ধরা পড়লে)
-        if (extras.isEmpty() && needSet.isNotEmpty()) Store.setNeed(c, emptySet()) // সমাধান হয়ে গেছে
-        if (extras.isNotEmpty()) {
-            val ex = card()
-            title(ex, "উত্তর যেতে দেরি হয়েছে", if (needSet.isNotEmpty()) "ফোন অ্যাপটা বন্ধ করে দিচ্ছিল — এটা চালু করুন" else null)
-            grid(ex, extras, 12)
-            addSide(ex, 16)
-        }
+        if (Store.need(c).isNotEmpty() && missing.isEmpty()) Store.setNeed(c, emptySet()) // সমাধান হয়ে গেছে
 
         // AI স্বয়ংক্রিয় চ্যাট: নিয়ম না মিললে প্রতিষ্ঠানের তথ্য থেকে AI উত্তর দেয়
         val aiCard = card()
@@ -958,8 +949,9 @@ class MainActivity : Activity() {
 
         // সংস্করণ (আপডেটের বোতাম শুধু মূল পাতায়; সাইডবারে কেবল সংস্করণ দেখায়)
         val ver = card()
-        title(ver, "Version ${Updater.curVer(c)}")
-        if (up == null) bullets(ver, listOf("আপনি সর্বশেষ সংস্করণে আছেন", "নতুন সংস্করণ এলে অ্যাপ নিজেই জানাবে"), 6)
+        @Suppress("DEPRECATION")
+        val vName = packageManager.getPackageInfo(packageName, 0).versionName ?: "1.0"
+        title(ver, "Version $vName.${Updater.curVer(c)}")
         addTo(ver, ghost("Auto Reply শেয়ার করুন") { shareApp() }, 12)
         addSide(ver, 14)
     }
@@ -1025,18 +1017,17 @@ class MainActivity : Activity() {
         val ht = LinearLayout(this)
         ht.orientation = LinearLayout.VERTICAL
         ht.addView(tv("AI সহকারী", 20f, bold = true))
-        ht.addView(tv("নিয়ম না মিললে AI নির্দেশ ও তথ্য দেখে নিজে ভেবে উত্তর দেবে", 12f, mute))
         val hlp = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
         hlp.leftMargin = d(12)
         head.addView(ht, hlp)
         addTo(box, head, 0)
 
         // ১. API কী
-        label(box, "API কী", "যেকোনো AI-র চাবি বসান (Gemini, Claude, OpenAI…): কোনটা, অ্যাপ নিজে চিনে নেবে")
+        label(box, "API কী")
         val keyRow = LinearLayout(this)
         keyRow.orientation = LinearLayout.HORIZONTAL
         keyRow.gravity = Gravity.CENTER_VERTICAL
-        val key = field("এখানে পেস্ট করুন", cur.key, secret = true)
+        val key = field("API কী পেস্ট করুন", cur.key, secret = true)
         keyRow.addView(key, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         var shown = false
         val eye = ghost("দেখান") {}
@@ -1055,18 +1046,18 @@ class MainActivity : Activity() {
         addTo(box, chip, 8)
 
         // ২. নির্দেশ: কী করবে, কী করবে না
-        label(box, "নির্দেশ (কী করবে, কী করবে না)", "কীভাবে কথা বলবে, কোন বিষয়ে কী করবে বা করবে না। AI এগুলো সবার আগে মানবে।")
-        val cmd = field("যেমন: বন্ধুর মতো সহজ বাংলায় কথা বলো; দাম বা সময় নিজে বলো না, বলো আমাদের টিম জানাবে", cur.cmd, lines = 5)
+        label(box, "নির্দেশ")
+        val cmd = field("কী করবে, কী করবে না", cur.cmd, lines = 4)
         addTo(box, cmd, 8)
 
         // ৩. প্রতিষ্ঠানের তথ্য
-        label(box, "প্রতিষ্ঠানের তথ্য", "নাম, সেবা, দাম, ঠিকানা, খোলার সময়, যোগাযোগ, সাধারণ প্রশ্ন-উত্তর। শুধু মেসেজের লেখা AI-তে যায়, নাম বা নম্বর যায় না।")
-        val info = field("AI আগে এখান থেকে উত্তর দেবে; না থাকলে নিজে ভেবে ও অনলাইনে খুঁজে বলবে", cur.info, lines = 6)
+        label(box, "প্রতিষ্ঠানের তথ্য")
+        val info = field("নাম, সেবা, দাম, ঠিকানা, সময়, যোগাযোগ", cur.info, lines = 5)
         addTo(box, info, 8)
 
         // ৩. পরীক্ষা
         label(box, "পরীক্ষা")
-        val testQ = field("কাস্টমার যা জিজ্ঞেস করতে পারে", "")
+        val testQ = field("প্রশ্ন লিখুন", "")
         addTo(box, testQ, 8)
         val testOut = tv("", 13f, ink)
         testOut.background = rounded(inner, 12, line)
@@ -1077,7 +1068,6 @@ class MainActivity : Activity() {
         val adv = LinearLayout(this)
         adv.orientation = LinearLayout.VERTICAL
         adv.visibility = View.GONE
-        addTo(adv, tv("সাধারণত এগুলো লাগে না। শুধু চাবির ধরন চেনা না গেলে বা নির্দিষ্ট মডেল চাইলে ব্যবহার করুন।", 12f, mute), 0)
         val rg = RadioGroup(this)
         rg.orientation = LinearLayout.VERTICAL
         fun rb(t: String): RadioButton {
@@ -1089,15 +1079,15 @@ class MainActivity : Activity() {
             rg.addView(r)
             return r
         }
-        val rbA = rb("স্বয়ংক্রিয় (প্রস্তাবিত)")
+        val rbA = rb("স্বয়ংক্রিয়")
         val rbG = rb("Gemini (Google)")
         val rbC = rb("Claude (Anthropic)")
-        val rbO = rb("OpenAI-সামঞ্জস্যপূর্ণ (DeepSeek, Groq…)")
+        val rbO = rb("OpenAI-compatible")
         rg.check(when (cur.prov) { "gemini" -> rbG.id; "claude" -> rbC.id; "openai" -> rbO.id; else -> rbA.id })
         addTo(adv, rg, 10)
-        val model = field("মডেলের নাম (খালি রাখলে নিজে বেছে নেবে)", cur.model)
+        val model = field("মডেল (ঐচ্ছিক)", cur.model)
         addTo(adv, model, 8)
-        val base = field("Base URL (শুধু OpenAI-সামঞ্জস্যপূর্ণ হলে)", cur.base)
+        val base = field("Base URL", cur.base)
         addTo(adv, base, 8)
 
         fun readCfg() = AiCfg(
@@ -1108,9 +1098,9 @@ class MainActivity : Activity() {
             val g = readCfg()
             val e = Ai.eff(g)
             when {
-                g.key.isBlank() -> { chip.text = "চাবি বসালে এখানে দেখাবে কোন AI চেনা গেছে"; chip.setTextColor(mute) }
-                e != null -> { chip.text = "\u2714  ${e.label} চেনা গেছে" + (if (e.id == "openai" && e.model.isBlank()) " (মডেলের নাম দিন)" else " \u00B7 মডেল: ${e.model}"); chip.setTextColor(accent) }
-                else -> { chip.text = "চাবির ধরন চেনা যায়নি; নিচের \"উন্নত\" থেকে বেছে নিন"; chip.setTextColor(warn) }
+                g.key.isBlank() -> { chip.text = ""; chip.visibility = View.GONE }
+                e != null -> { chip.visibility = View.VISIBLE; chip.text = "\u2714  ${e.label}" + (if (e.id == "openai" && e.model.isBlank()) " · মডেল দিন" else " \u00B7 ${e.model}"); chip.setTextColor(accent) }
+                else -> { chip.visibility = View.VISIBLE; chip.text = "চেনা যায়নি"; chip.setTextColor(warn) }
             }
             base.visibility = if (e?.id == "openai") View.VISIBLE else View.GONE
         }
