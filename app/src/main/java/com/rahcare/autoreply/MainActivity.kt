@@ -727,27 +727,16 @@ class MainActivity : Activity() {
             box.addView(tv("এখনো কোনো মেসেজের নোটিফিকেশন আসেনি", 13f, mute))
             return
         }
-        val p = raw.split(" | ", limit = 4)
-        if (p.size < 4) {
-            box.addView(tv(raw, 13f, mute))
-            return
-        }
-        val done = p[3].contains("উত্তর পাঠানো হয়েছে")
+        val done = raw == "মেসেজ গিয়েছে"
         val head = SpannableStringBuilder("● ")
         head.setSpan(ForegroundColorSpan(if (done) accent else warn), 0, 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-        head.append(p[1]).append("  ·  ").append(p[0])
+        head.append(raw)
         val h = TextView(this)
         h.text = head
         h.textSize = 14f
         h.setTextColor(ink)
         h.setTypeface(h.typeface, Typeface.BOLD)
         box.addView(h)
-        val who = tv("প্রেরক: " + p[2], 13f, mute)
-        who.setPadding(0, d(4), 0, 0)
-        box.addView(who)
-        val res = tv(p[3], 13f, mute)
-        res.setPadding(0, d(2), 0, 0)
-        box.addView(res)
     }
 
     private fun brand() = Build.MANUFACTURER.lowercase()

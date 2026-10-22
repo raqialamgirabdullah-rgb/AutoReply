@@ -171,8 +171,12 @@ object Store {
 
     fun events(c: Context) = p(c).getString("ev", "") ?: ""
 
-    fun log(c: Context) = p(c).getString("log", "") ?: ""
-    fun setLog(c: Context, v: String) = p(c).edit().putString("log", v).apply()
+    // নতুন কী "log2": শুধু ফলাফল থাকে। পুরোনো "log"-এ মেসেজের লেখা ছিল, তাই পেলেই মুছে দেওয়া হয়
+    fun log(c: Context): String {
+        if (p(c).contains("log")) p(c).edit().remove("log").apply()
+        return p(c).getString("log2", "") ?: ""
+    }
+    fun setLog(c: Context, v: String) = p(c).edit().remove("log").putString("log2", v).apply()
 
     // ---------- AI স্বয়ংক্রিয় চ্যাট: নিয়ম না মিললে প্রতিষ্ঠানের তথ্য থেকে AI উত্তর দেয় ----------
     fun aiOn(c: Context) = p(c).getBoolean("ai_on", false)

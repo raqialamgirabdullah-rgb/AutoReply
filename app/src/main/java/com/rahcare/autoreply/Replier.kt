@@ -28,8 +28,15 @@ object Replier {
 
     // শেষ ঘটনার রেকর্ড, অ্যাপের সাইডবারে দেখা যায়
     private fun log(c: Context, pkg: String, uid: Int, who: String, text: String, res: String) {
-        val t = SimpleDateFormat("HH:mm:ss", Locale.US).format(Date())
-        Store.setLog(c, "$t | ${Store.label(pkg, uid)} | $who | \"$text\" — $res")
+        // শুধু ফলাফল/কারণ রাখা হয়: মেসেজের লেখা, প্রেরক, নিজের বা AI-এর উত্তরের লেখা, গ্রুপের নাম — কিছুই নয়
+        val short = when {
+            res.startsWith("উত্তর পাঠানো হয়েছে") || res.startsWith("AI উত্তর পাঠানো হয়েছে") -> "মেসেজ গিয়েছে"
+            res.startsWith("টেলিগ্রামের চ্যানেল/বট") -> "টেলিগ্রামের চ্যানেল/বট, তাই বাদ"
+            res.startsWith("গ্রুপ ধরা হয়েছে") -> "গ্রুপ মেসেজ, তাই বাদ (কোনো নিয়মে গ্রুপ সুইচ চালু নেই)"
+            res.startsWith("Reply বাটন পাওয়া যায়নি") -> "Reply বাটন পাওয়া যায়নি"
+            else -> res
+        }
+        Store.setLog(c, short)
     }
 
     // listener ও accessibility — দুই পথ থেকেই এখানে আসে। একসাথে চললে যেন দুবার উত্তর না যায়, তাই synchronized ও সাম্প্রতিক-মেসেজ যাচাই
