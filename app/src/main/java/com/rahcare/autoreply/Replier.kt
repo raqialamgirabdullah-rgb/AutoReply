@@ -96,12 +96,12 @@ object Replier {
             if (cid.contains("group")) isGroup = true
         }
 
+        val dk = "$pkg|$sender|$text|$mid"
+        val pk = "$pkg|$sender|$text"
         if (!catchUp) {
             val now = System.currentTimeMillis()
-            val dk = "$pkg|$sender|$text|$mid"
             val last = recent[dk]
             val fromA11y = key.startsWith("a11y|")
-            val pk = "$pkg|$sender|$text"
             val lp = lastPath[pk]
             // সময়ছাপ থাকলে: একই মেসেজ আগে দেখা হলে বাদ (সময় যতই পার হোক)। সময়ছাপ একেবারেই না থাকলে: শুধু ৩ সেকেন্ডে একই মেসেজ দুই পথে এলে বাদ
             if (last != null && (mid.isNotEmpty() || now - last < 3000L)) {
@@ -140,12 +140,12 @@ object Replier {
             val ris = a.remoteInputs ?: continue
             // আগে মুক্ত-লেখার ঘর; না পেলে যেকোনো সাধারণ (ডেটা-নয়) ইনপুট ঘর, কারণ কিছু অ্যাপ (যেমন Facebook Lite) এভাবে দেয়
             val ri = ris.firstOrNull { it.allowFreeFormInput } ?: ris.firstOrNull { it.allowedDataTypes.isEmpty() } ?: continue
-            if (reply == null) { replyWithAi(c, pkg, uid, sender, text, a, ris, ri); return }
+            if (reply == null) { replyWithAi(c, pkg, uid, sender, text, a, ris, ri, dk, pk, key); return }
             if (sent.size > 50) sent.clear()
             sent.add(reply)
             val err = send(c, a, ris, ri, reply)
             Store.ev(c, "উত্তর পাঠানোর ফল: " + (err ?: "সফল"))
-            if (err == null) Store.stamp(c, "reply")
+            if (err == null) Store.stamp(c, "reply") else forget(dk, pk, key)
             log(c, pkg, uid, sender, text, if (err == null) "উত্তর পাঠানো হয়েছে: $reply" else "পাঠাতে ব্যর্থ ($err)")
             return
         }
@@ -158,7 +158,7 @@ object Replier {
     }
 
     // AI-এর উত্তর আসতে সময় লাগে, তাই আলাদা থ্রেডে API কল করে তারপর একই Reply বাটনে পাঠায়
-    private fun replyWithAi(c: Context, pkg: String, uid: Int, sender: String, text: String, a: Notification.Action, ris: Array<RemoteInput>, ri: RemoteInput) {
+    private fun replyWithAi(c: Context, pkg: String, uid: Int, sender: String, text: String, a: Notification.Action, ris: Array<RemoteInput>, ri: RemoteInput, dk: String, pk: String, key: String) {
         log(c, pkg, uid, sender, text, "AI উত্তর তৈরি হচ্ছে…")
         val conv = "$pkg@$uid|$sender"
         Thread {
@@ -172,6 +172,7 @@ object Replier {
                 val ans = res.first
                 if (ans == null) {
                     Store.ev(c, "AI ব্যর্থ: ${res.second}")
+                    forget(dk, pk, key)
                     log(c, pkg, uid, sender, text, "AI ব্যর্থ: ${res.second}")
                     return@Thread
                 }
@@ -181,14 +182,24 @@ object Replier {
                 }
                 val err = send(c, a, ris, ri, ans)
                 Store.ev(c, "AI উত্তরের ফল: " + (err ?: "সফল"))
-                if (err == null) Store.stamp(c, "reply")
+                if (err == null) Store.stamp(c, "reply") else forget(dk, pk, key)
                 log(c, pkg, uid, sender, text, if (err == null) "AI উত্তর পাঠানো হয়েছে: ${ans.take(80)}" else "পাঠাতে ব্যর্থ ($err)")
             } catch (e: Exception) {
+                forget(dk, pk, key)
                 log(c, pkg, uid, sender, text, "AI ব্যর্থ: ${e.javaClass.simpleName}")
             } finally {
                 try { if (wl != null && wl.isHeld) wl.release() } catch (e: Exception) {}
             }
         }.start()
+    }
+
+    // পাঠাতে ব্যর্থ হলে এই মেসেজের "দেখা হয়ে গেছে" চিহ্ন মুছে দিই, যেন একই নোটিফিকেশন আবার এলে নতুন করে উত্তর দেওয়ার চেষ্টা হয়
+    private fun forget(dk: String, pk: String, key: String) {
+        synchronized(this) {
+            recent.remove(dk)
+            lastPath.remove(pk)
+            lastSeen.remove(key)
+        }
     }
 
     private fun send(c: Context, a: Notification.Action, ris: Array<RemoteInput>, ri: RemoteInput, text: String): String? {
