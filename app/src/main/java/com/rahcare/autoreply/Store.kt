@@ -26,6 +26,7 @@ object Store {
 
     // ফোনে থাকলে "কোন অ্যাপে চলবে" তালিকায় আসা চেনা মেসেজিং/সোশ্যাল অ্যাপ (প্যাকেজ → নাম)।
     // প্রতিটির আলাদা সুইচ, ডিফল্টে বন্ধ: ব্যবহারকারী চালু করলে তবেই উত্তর যায়।
+    // SMS অ্যাপ ইচ্ছে করেই নেই: তাতে উত্তর গেলে সিমের টাকা কাটে।
     // উত্তর যেতে হলে অ্যাপের নোটিফিকেশনে Reply বাটন থাকতে হয় (সব অ্যাপে থাকে না)।
     // নতুন অ্যাপ যোগ করতে এখানে একটা লাইন বাড়ালেই হবে। ফোনের নিজের "সোশ্যাল" বিভাগের অ্যাপও (এই তালিকায় না থাকলেও) দেখানো হয়।
     val KNOWN_CHAT = linkedMapOf(
@@ -39,8 +40,6 @@ object Store {
         "com.snapchat.android" to "Snapchat",
         "com.Slack" to "Slack",
         "com.microsoft.teams" to "Microsoft Teams",
-        "com.google.android.apps.messaging" to "Messages",
-        "com.samsung.android.messaging" to "Samsung Messages",
         "com.google.android.apps.dynamite" to "Google Chat",
         "com.twitter.android" to "X",
         "com.linkedin.android" to "LinkedIn",
