@@ -4,6 +4,7 @@ import android.app.Notification
 import android.app.RemoteInput
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
 import java.text.SimpleDateFormat
@@ -24,6 +25,21 @@ object Replier {
     // কপি ধরা পড়ার পর (বা একই পথে) আবার একই লেখা এলে সেটা নতুন মেসেজ, তাই সাথে সাথে পাঠানো একই লেখার দ্বিতীয় মেসেজেও উত্তর যায়
     private val lastPath = object : LinkedHashMap<String, Triple<Boolean, Long, Boolean>>(16, 0.75f, false) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Triple<Boolean, Long, Boolean>>?): Boolean = size > 200
+    }
+
+    // Facebook Lite-এর Reply বাটন কী ধরনের তা বোঝার জন্য প্রযুক্তিগত বিবরণ (শুধু Facebook Lite-এর লগে যোগ হয়; মেসেজের লেখা নয়)
+    @Volatile private var diagTxt = ""
+
+    private fun diag(a: Notification.Action, ri: RemoteInput, ris: Array<RemoteInput>): String {
+        val pi = a.actionIntent
+        val t = if (Build.VERSION.SDK_INT >= 31) when {
+            pi.isActivity -> "activity"
+            pi.isBroadcast -> "broadcast"
+            pi.isService -> "service"
+            pi.isForegroundService -> "fgservice"
+            else -> "?"
+        } else "?"
+        return "PI=$t ঘর=${ris.size} মুক্ত=${ri.allowFreeFormInput} বাছাই=${ri.choices?.size ?: 0} বাটন=${a.title}"
     }
 
     // লগে দেখানোর জন্য শুধু অ্যাপের নাম (সুইচের দল নয়, তাই Business Suite আলাদা দেখায়)
@@ -47,7 +63,8 @@ object Replier {
             res.startsWith("Reply বাটন পাওয়া যায়নি") -> "Reply বাটন পাওয়া যায়নি"
             else -> res
         }
-        Store.setLog(c, appName(pkg) + " — " + short)
+        val extra = if (pkg.lowercase().startsWith("com.facebook.lite") && diagTxt.isNotEmpty()) " [" + diagTxt + "]" else ""
+        Store.setLog(c, appName(pkg) + " — " + short + extra)
     }
 
     // listener ও accessibility — দুই পথ থেকেই এখানে আসে। একসাথে চললে যেন দুবার উত্তর না যায়, তাই synchronized ও সাম্প্রতিক-মেসেজ যাচাই
@@ -143,6 +160,7 @@ object Replier {
             if (reply == null) { replyWithAi(c, pkg, uid, sender, text, a, ris, ri, dk, pk, key); return }
             if (sent.size > 50) sent.clear()
             sent.add(reply)
+            diagTxt = diag(a, ri, ris)
             val err = send(c, a, ris, ri, reply)
             Store.ev(c, "উত্তর পাঠানোর ফল: " + (err ?: "সফল"))
             if (err == null) Store.stamp(c, "reply") else forget(dk, pk, key)
@@ -154,6 +172,7 @@ object Replier {
             val r = a.remoteInputs
             "${a.title}[" + (if (r == null) "ইনপুট ঘর নেই" else r.joinToString(",") { "মুক্ত=${it.allowFreeFormInput} বাছাই=${it.choices?.size ?: 0}" }) + "]"
         }
+        diagTxt = d
         log(c, pkg, uid, sender, text, "Reply বাটন পাওয়া যায়নি — বাটন: $d")
     }
 
@@ -180,6 +199,7 @@ object Replier {
                     if (sent.size > 50) sent.clear()
                     sent.add(ans)
                 }
+                diagTxt = diag(a, ri, ris)
                 val err = send(c, a, ris, ri, ans)
                 Store.ev(c, "AI উত্তরের ফল: " + (err ?: "সফল"))
                 if (err == null) Store.stamp(c, "reply") else forget(dk, pk, key)
