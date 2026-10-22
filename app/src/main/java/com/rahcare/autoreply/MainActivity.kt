@@ -53,6 +53,8 @@ class MainActivity : Activity() {
     private lateinit var root: LinearLayout     // মূল পাতা: শুধু উত্তরের নিয়মের কার্ড
     private lateinit var side: LinearLayout     // সাইডবার: চালু/বন্ধ কার্ড ও বাকি সব অপশন
     private lateinit var sideSv: ScrollView
+    private lateinit var sideBox: FrameLayout        // সাইডবারের পুরো বাক্স: স্ক্রল অংশ + নিচে বসানো সংস্করণ কার্ড
+    private lateinit var verHolder: FrameLayout      // সংস্করণ কার্ড: নিচের + বোতামের বরাবর
     private lateinit var scrim: View
     private lateinit var dot: View
     private lateinit var barHolder: FrameLayout
@@ -120,17 +122,29 @@ class MainActivity : Activity() {
         // সাইডবার (ডান পাশ থেকে স্লাইড করে আসে) ও তার পেছনের আবছা পর্দা
         side = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(d(16), d(26), d(16), d(40))
+            setPadding(d(16), d(26), d(16), d(100)) // নিচে ফাঁক: সংস্করণ কার্ডের নিচে লেখা ঢুকে না যায়
         }
         sideSv = ScrollView(this).apply {
             addView(side)
+            clipToPadding = false
+        }
+        verHolder = FrameLayout(this)
+        sideBox = FrameLayout(this).apply {
             setBackgroundColor(Color.parseColor("#0B1115"))
             visibility = View.GONE
             isClickable = true
+            elevation = d(12).toFloat() // + ও আপডেট বোতামের (৬dp) ওপরে, তাই সাইডবার খুললে ওগুলো নিচে ঢাকা পড়ে
+            addView(sideSv, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+            addView(verHolder, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM).apply {
+                leftMargin = d(16)
+                rightMargin = d(16)
+                bottomMargin = d(24) // + বোতামের নিচের ফাঁকের সমান
+            })
         }
         scrim = View(this).apply {
             setBackgroundColor(Color.parseColor("#99000000"))
             visibility = View.GONE
+            elevation = d(10).toFloat()
             setOnClickListener { closeMenu() }
         }
         val frame = FrameLayout(this)
@@ -193,7 +207,7 @@ class MainActivity : Activity() {
             bottomMargin = d(24)
         })                                                           // + / ✔ বোতাম এডিটর পাতার ওপরেই থাকে
         frame.addView(scrim, FrameLayout.LayoutParams(mp, mp))
-        frame.addView(sideSv, FrameLayout.LayoutParams(sideW(), mp, Gravity.START))
+        frame.addView(sideBox, FrameLayout.LayoutParams(sideW(), mp, Gravity.START))
         setContentView(frame)
     }
 
@@ -253,16 +267,16 @@ class MainActivity : Activity() {
         scrim.alpha = 0f
         scrim.visibility = View.VISIBLE
         scrim.animate().alpha(1f).setDuration(180).start()
-        sideSv.visibility = View.VISIBLE
-        sideSv.translationX = -sideW().toFloat()
-        sideSv.animate().translationX(0f).setDuration(200).start()
+        sideBox.visibility = View.VISIBLE
+        sideBox.translationX = -sideW().toFloat()
+        sideBox.animate().translationX(0f).setDuration(200).start()
     }
 
     private fun closeMenu() {
         if (!menuOpen) return
         menuOpen = false
         scrim.animate().alpha(0f).setDuration(160).withEndAction { if (!menuOpen) scrim.visibility = View.GONE }.start()
-        sideSv.animate().translationX(-sideW().toFloat()).setDuration(180).withEndAction { if (!menuOpen) sideSv.visibility = View.GONE }.start()
+        sideBox.animate().translationX(-sideW().toFloat()).setDuration(180).withEndAction { if (!menuOpen) sideBox.visibility = View.GONE }.start()
     }
 
     @Suppress("DEPRECATION")
@@ -1027,7 +1041,10 @@ class MainActivity : Activity() {
         vrow.addView(vt, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { rightMargin = d(10) })
         vrow.addView(ghost("Share") { shareApp() }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         addTo(ver, vrow, 0)
-        addSide(ver, 14)
+        ver.minimumHeight = d(58)                 // + বোতামের সমান উচ্চতা, তাই একই সারিতে বসে
+        ver.gravity = Gravity.CENTER_VERTICAL
+        verHolder.removeAllViews()
+        verHolder.addView(ver, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
     }
 
     // অ্যাপের APK "Auto Reply.apk" নামে শেয়ার (ফাইলের নাম ApkShareProvider ঠিক করে)
