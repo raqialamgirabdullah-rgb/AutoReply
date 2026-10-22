@@ -1289,24 +1289,24 @@ class MainActivity : Activity() {
             return cd
         }
 
-        val md = intArrayOf(r?.mode ?: Store.M_EXACT) // নতুন নিয়ম "Exact match" দিয়ে শুরু হয়
+        val md = intArrayOf(r?.mode ?: Store.M_EXACT) // নতুন নিয়ম "হুবহু মিল (Exact match)" দিয়ে শুরু হয়
         fun hintFor(m: Int) = when (m) {
-            Store.M_REGEX -> "Type a RegEx (one per line)"
-            Store.M_PATTERN -> "Type a pattern, use * for any text (separate with commas)"
-            else -> "Type the message (separate variants with commas)"
+            Store.M_REGEX -> "রেজেক্স (RegEx) লিখুন (প্রতি লাইনে একটি)"
+            Store.M_PATTERN -> "প্যাটার্ন লিখুন, যেকোনো লেখার জায়গায় * দিন (কমা দিয়ে আলাদা করুন)"
+            else -> "মেসেজ লিখুন (একাধিক রকম হলে কমা দিয়ে আলাদা করুন)"
         }
         val k = field(hintFor(md[0]), r?.keys ?: "")
         val modes = listOf(
-            Triple(Store.M_EXACT, "Exact match",
-                "The whole message must be the same as one of your messages. Capital letters, extra spaces and punctuation (! ? । .) are ignored.\n\nExample: \"assalamu alaikum\" matches \"Assalamu Alaikum!\" but NOT \"Karim told Rahim assalamu alaikum\"."),
-            Triple(Store.M_SIMILAR, "Similarity match",
-                "The whole message only needs to be about 80% similar to one of your messages, so small spelling mistakes still match.\n\nExample: \"assalamualaikum\" matches \"assalamu alaikum\"."),
-            Triple(Store.M_PATTERN, "Pattern matching",
-                "Use * for any text. The whole message must fit the pattern.\n\n\"hello*\" matches anything that starts with hello.\n\"*price*\" matches any message that contains price."),
-            Triple(Store.M_REGEX, "Expert pattern matching (RegEx)",
-                "Write a regular expression, one per line. It matches when it is found anywhere in the message; use ^ and \$ to match the whole message."),
-            Triple(Store.M_CONTAINS, "Contains",
-                "The message matches if it contains one of your words anywhere (the old behavior). Short English words like \"hi\" must stand alone.")
+            Triple(Store.M_EXACT, "হুবহু মিল (Exact match)",
+                "পুরো মেসেজটা আপনার লেখা মেসেজগুলোর কোনো একটার সাথে হুবহু এক হতে হবে। বড়-ছোট হাতের অক্ষর, বাড়তি ফাঁকা এবং চিহ্ন (! ? । .) ধরা হয় না।\n\nউদাহরণ: \"assalamu alaikum\" লিখলে \"Assalamu Alaikum!\" মিলবে, কিন্তু \"করিম রহিমকে assalamu alaikum বলেছে\" মিলবে না।"),
+            Triple(Store.M_SIMILAR, "কাছাকাছি মিল (Similarity match)",
+                "পুরো মেসেজটা আপনার লেখা কোনো মেসেজের সাথে প্রায় ৮০% মিললেই হবে, তাই ছোটখাটো বানান ভুল থাকলেও মিলে যাবে।\n\nউদাহরণ: \"assalamualaikum\" লিখলে \"assalamu alaikum\" মিলবে।"),
+            Triple(Store.M_PATTERN, "প্যাটার্ন মিল (Pattern matching)",
+                "যেকোনো লেখার জায়গায় * ব্যবহার করুন। পুরো মেসেজটা প্যাটার্নের সাথে মিলতে হবে।\n\n\"hello*\" লিখলে যে মেসেজ hello দিয়ে শুরু হয় সেটা মিলবে।\n\"*price*\" লিখলে যে মেসেজে price শব্দটা আছে সেটা মিলবে।"),
+            Triple(Store.M_REGEX, "বিশেষজ্ঞ প্যাটার্ন (RegEx)",
+                "রেগুলার এক্সপ্রেশন (RegEx) লিখুন, প্রতি লাইনে একটি। মেসেজের যেকোনো জায়গায় মিললেই কাজ করবে; পুরো মেসেজ মেলাতে চাইলে ^ ও \$ ব্যবহার করুন।"),
+            Triple(Store.M_CONTAINS, "শব্দ থাকলেই (Contains)",
+                "মেসেজের যেকোনো জায়গায় আপনার লেখা কোনো শব্দ থাকলেই মিলবে (আগের নিয়ম)। \"hi\"-এর মতো ছোট ইংরেজি শব্দ আলাদা শব্দ হিসেবে থাকতে হবে।")
         )
         val dots = ArrayList<RadioDot>()
         fun refreshModes() {
@@ -1334,7 +1334,7 @@ class MainActivity : Activity() {
             info.setTextColor(Color.parseColor("#06201C"))
             info.background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(accent) }
             info.setOnClickListener {
-                AlertDialog.Builder(this).setTitle(m.second).setMessage(m.third).setPositiveButton("OK", null).show()
+                AlertDialog.Builder(this).setTitle(m.second).setMessage(m.third).setPositiveButton("ঠিক আছে", null).show()
             }
             row.addView(info, LinearLayout.LayoutParams(d(24), d(24)))
             row.setOnClickListener { md[0] = m.first; refreshModes() }
