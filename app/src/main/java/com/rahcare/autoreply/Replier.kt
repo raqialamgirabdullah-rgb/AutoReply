@@ -20,8 +20,10 @@ object Replier {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Long>?): Boolean = size > 500
     }
     // দুই পথের একটিতে সময়ছাপ না থাকলে একই মেসেজ আলাদা ভাবা হতে পারে: তাই শুধু "অন্য পথ থেকে ১.৫ সেকেন্ডের মধ্যে একই মেসেজ" দ্বিতীয়বার ধরা হয় না (একই পথের পরপর মেসেজে এর কোনো প্রভাব নেই)
-    private val lastPath = object : LinkedHashMap<String, Pair<Boolean, Long>>(16, 0.75f, false) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Pair<Boolean, Long>>?): Boolean = size > 200
+    // মান = (প্রথম কোন পথে এসেছিল: a11y কি না, কখন, অন্য পথের কপি আগেই ধরা পড়েছে কি না)। প্রতিটা মেসেজের কপি একবারই বাদ যায়;
+    // কপি ধরা পড়ার পর (বা একই পথে) আবার একই লেখা এলে সেটা নতুন মেসেজ, তাই সাথে সাথে পাঠানো একই লেখার দ্বিতীয় মেসেজেও উত্তর যায়
+    private val lastPath = object : LinkedHashMap<String, Triple<Boolean, Long, Boolean>>(16, 0.75f, false) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Triple<Boolean, Long, Boolean>>?): Boolean = size > 200
     }
 
     // শেষ ঘটনার রেকর্ড, অ্যাপের সাইডবারে দেখা যায়
@@ -80,14 +82,23 @@ object Replier {
             val now = System.currentTimeMillis()
             val dk = "$pkg|$sender|$text|$mid"
             val last = recent[dk]
-            // সময়ছাপ থাকলে: একই মেসেজ আগে দেখা হলে বাদ (সময় যতই পার হোক)। সময়ছাপ একেবারেই না থাকলে: শুধু ৩ সেকেন্ডে একই মেসেজ দুই পথে এলে বাদ
-            if (last != null && (mid.isNotEmpty() || now - last < 3000L)) return
-            recent[dk] = now
             val fromA11y = key.startsWith("a11y|")
             val pk = "$pkg|$sender|$text"
             val lp = lastPath[pk]
-            if (lp != null && lp.first != fromA11y && now - lp.second < 1500L) return
-            lastPath[pk] = Pair(fromA11y, now)
+            // সময়ছাপ থাকলে: একই মেসেজ আগে দেখা হলে বাদ (সময় যতই পার হোক)। সময়ছাপ একেবারেই না থাকলে: শুধু ৩ সেকেন্ডে একই মেসেজ দুই পথে এলে বাদ
+            if (last != null && (mid.isNotEmpty() || now - last < 3000L)) {
+                // অন্য পথের কপি ধরা পড়ল: এই মেসেজের কপি ব্যবহার হয়ে গেছে বলে চিহ্ন দিই
+                if (lp != null && lp.first != fromA11y) lastPath[pk] = Triple(lp.first, lp.second, true)
+                Store.ev(c, "একই মেসেজের কপি বাদ (সময়ছাপ মিলেছে): $pkg")
+                return
+            }
+            recent[dk] = now
+            if (lp != null && lp.first != fromA11y && !lp.third && now - lp.second < 1500L) {
+                lastPath[pk] = Triple(lp.first, lp.second, true)
+                Store.ev(c, "একই মেসেজের অন্য পথের কপি বাদ: $pkg")
+                return
+            }
+            lastPath[pk] = Triple(fromA11y, now, false)
         }
         if (mid.isNotEmpty()) {
             if (lastSeen[key] == mid + text) return
