@@ -32,6 +32,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
 import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.RadioButton
 import android.widget.RadioGroup
@@ -578,6 +579,33 @@ class MainActivity : Activity() {
         }
     }
 
+    // অ্যাপের আসল আইকন (ফোন থেকেই নেওয়া); একাধিক প্যাকেজ দিলে যেটা আগে ইনস্টল আছে সেটার; একটাও না পেলে নামের প্রথম অক্ষরের গোল ব্যাজ
+    private fun appIcon(pkgs: List<String>, name: String, sizeDp: Int): View {
+        for (pkg in pkgs) {
+            try {
+                val iv = ImageView(this)
+                iv.setImageDrawable(packageManager.getApplicationIcon(pkg))
+                iv.scaleType = ImageView.ScaleType.FIT_CENTER
+                return iv
+            } catch (e: Exception) { }
+        }
+        val b = tv(name.trim().take(1).uppercase().ifEmpty { "?" }, sizeDp * 0.4f, Color.parseColor("#0B1215"), true)
+        b.gravity = Gravity.CENTER
+        b.background = rounded(accent, sizeDp / 2)
+        return b
+    }
+
+    // দলের আইকন: মূল অ্যাপ আগে (WhatsApp, Facebook, Telegram), তারপর ফোনে থাকা ক্লোন/অন্য ভেরিয়েন্ট
+    private fun groupIcon(g: String, sizeDp: Int = 40): View {
+        val prefer = when (g) {
+            "WhatsApp" -> listOf("com.whatsapp", "com.whatsapp.w4b")
+            "Facebook" -> listOf("com.facebook.katana", "com.facebook.orca", "com.facebook.lite", "com.facebook.pages.app")
+            "Telegram" -> listOf("org.telegram.messenger", "org.telegram.messenger.web")
+            else -> emptyList()
+        }
+        return appIcon((prefer + variantsOf(g).map { it.first }).distinct(), g, sizeDp)
+    }
+
     // একটা দলের (WhatsApp/Facebook/Telegram) সব ভেরিয়েন্ট: ফোনে ইনস্টল থাকা + যেগুলো থেকে নোটিফিকেশন এসেছে (ক্লোন/ডুয়াল সহ)
     private fun variantsOf(g: String): List<Triple<String, Int, String>> {
         val out = LinkedHashMap<String, Triple<String, Int, String>>()
@@ -615,7 +643,13 @@ class MainActivity : Activity() {
         addTo(box, tv(sub, 12f, mute), 4)
         for ((pkg, uid, name) in list) {
             val pk: String? = if (Store.APPS.containsKey(pkg)) null else pkg
-            addTo(box, swRow(name, pk, Store.varOn(this, pkg, uid)) { v -> Store.setVarOn(this, pkg, uid, v) }, 14)
+            val line1 = LinearLayout(this)
+            line1.orientation = LinearLayout.HORIZONTAL
+            line1.gravity = Gravity.CENTER_VERTICAL
+            line1.addView(appIcon(listOf(pkg), name, 36), LinearLayout.LayoutParams(d(36), d(36)).apply { rightMargin = d(12) })
+            line1.addView(swRow(name, pk, Store.varOn(this, pkg, uid)) { v -> Store.setVarOn(this, pkg, uid, v) },
+                LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            addTo(box, line1, 14)
         }
         addTo(box, ghost("ঠিক আছে") { dlg.dismiss() }, 16)
         val sv = ScrollView(this)
@@ -628,13 +662,18 @@ class MainActivity : Activity() {
     }
 
     // সাইডবারের অ্যাপের ঘর (দুই কলামের গ্রিডের জন্য): ওপরে নাম, নিচে খুঁটিনাটি, সবার নিচে অবস্থা ও সুইচ
-    private fun swCell(t: String, details: List<String>, on: Boolean, onTap: (() -> Unit)? = null, f: (Boolean) -> Unit): LinearLayout {
+    private fun swCell(t: String, details: List<String>, on: Boolean, onTap: (() -> Unit)? = null, icon: View? = null, f: (Boolean) -> Unit): LinearLayout {
         val r = LinearLayout(this)
         if (onTap != null) r.setOnClickListener { onTap() }
         r.orientation = LinearLayout.VERTICAL
         r.gravity = Gravity.CENTER_HORIZONTAL
         r.background = rounded(panel, 16, line)
         r.setPadding(d(8), d(12), d(8), d(10))
+        // ওপরে অ্যাপের আইকন
+        if (icon != null) r.addView(icon, LinearLayout.LayoutParams(d(40), d(40)).apply {
+            gravity = Gravity.CENTER_HORIZONTAL
+            bottomMargin = d(8)
+        })
         // নাম এক লাইনে থাকে; জায়গা কম হলে অক্ষর নিজে ছোট হয়, ভাঙে না
         val name = tv(t, 13f, bold = true)
         name.gravity = Gravity.CENTER
@@ -929,7 +968,7 @@ class MainActivity : Activity() {
         for (pkg in Store.APPS.keys) {
             val g = Store.grp(pkg) ?: continue
             if (!shownG.add(g)) continue
-            cells.add(swCell(g, listOf("ভেরিয়েন্ট দেখুন ›"), Store.grpOn(c, g), { variantsDialog(g) }) { v -> Store.setGrpOn(c, g, v) })
+            cells.add(swCell(g, listOf("ভেরিয়েন্ট দেখুন ›"), Store.grpOn(c, g), { variantsDialog(g) }, groupIcon(g)) { v -> Store.setGrpOn(c, g, v) })
         }
         val shown = HashSet<String>()
         for (i in Store.insts(c)) {
@@ -942,7 +981,7 @@ class MainActivity : Activity() {
             det.add(i.pkg)
             if (i.uid != 0) det.add("ইউজার ${i.uid}")
             det.add(fmt.format(Date(i.t)))
-            cells.add(swCell("অচেনা অ্যাপ", det, Store.instOn(c, i.pkg, i.uid)) { v -> Store.setInstOn(c, i.pkg, i.uid, v) })
+            cells.add(swCell("অচেনা অ্যাপ", det, Store.instOn(c, i.pkg, i.uid), icon = appIcon(listOf(i.pkg), nm.ifBlank { i.pkg.substringAfterLast('.') }, 40)) { v -> Store.setInstOn(c, i.pkg, i.uid, v) })
         }
         grid(apps, cells, 12, 3)
         addSide(apps, 14)
