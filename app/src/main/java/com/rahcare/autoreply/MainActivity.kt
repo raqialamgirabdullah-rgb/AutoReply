@@ -958,7 +958,7 @@ class MainActivity : Activity() {
 
         // সংস্করণ (আপডেটের বোতাম শুধু মূল পাতায়; সাইডবারে কেবল সংস্করণ দেখায়)
         val ver = card()
-        title(ver, "সংস্করণ ${Updater.curVer(c)}")
+        title(ver, "Version ${Updater.curVer(c)}")
         if (up == null) bullets(ver, listOf("আপনি সর্বশেষ সংস্করণে আছেন", "নতুন সংস্করণ এলে অ্যাপ নিজেই জানাবে"), 6)
         addTo(ver, ghost("Auto Reply শেয়ার করুন") { shareApp() }, 12)
         addSide(ver, 14)
