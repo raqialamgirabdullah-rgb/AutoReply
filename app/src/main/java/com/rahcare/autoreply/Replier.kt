@@ -26,9 +26,20 @@ object Replier {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Triple<Boolean, Long, Boolean>>?): Boolean = size > 200
     }
 
+    // লগে দেখানোর জন্য শুধু অ্যাপের নাম (সুইচের দল নয়, তাই Business Suite আলাদা দেখায়)
+    private fun appName(pkg: String): String {
+        val l = pkg.lowercase()
+        return when {
+            l.startsWith("com.facebook.pages.app") -> "Business Suite"
+            l.startsWith("com.facebook.orca") -> "Messenger"
+            l.startsWith("com.facebook.lite") -> "Facebook Lite"
+            else -> Store.family(pkg) ?: "অন্য অ্যাপ"
+        }
+    }
+
     // শেষ ঘটনার রেকর্ড, অ্যাপের সাইডবারে দেখা যায়
     private fun log(c: Context, pkg: String, uid: Int, who: String, text: String, res: String) {
-        // শুধু ফলাফল/কারণ রাখা হয়: মেসেজের লেখা, প্রেরক, নিজের বা AI-এর উত্তরের লেখা, গ্রুপের নাম — কিছুই নয়
+        // শুধু অ্যাপের নাম + ফলাফল/কারণ রাখা হয়: মেসেজের লেখা, প্রেরকের নাম, উত্তরের লেখা, গ্রুপের নাম — কিছুই নয়
         val short = when {
             res.startsWith("উত্তর পাঠানো হয়েছে") || res.startsWith("AI উত্তর পাঠানো হয়েছে") -> "মেসেজ গিয়েছে"
             res.startsWith("টেলিগ্রামের চ্যানেল/বট") -> "টেলিগ্রামের চ্যানেল/বট, তাই বাদ"
@@ -36,7 +47,7 @@ object Replier {
             res.startsWith("Reply বাটন পাওয়া যায়নি") -> "Reply বাটন পাওয়া যায়নি"
             else -> res
         }
-        Store.setLog(c, short)
+        Store.setLog(c, appName(pkg) + " — " + short)
     }
 
     // listener ও accessibility — দুই পথ থেকেই এখানে আসে। একসাথে চললে যেন দুবার উত্তর না যায়, তাই synchronized ও সাম্প্রতিক-মেসেজ যাচাই

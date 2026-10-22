@@ -272,6 +272,7 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        Store.log(this) // অ্যাপ খুললেই পুরোনো লগের (মেসেজের লেখাসহ) বাকি অংশ মুছে যায়
         if (updStage == 2) resetUpd() // ইনস্টল নিশ্চিতকরণের পর্দা থেকে ফিরলে (বাতিল করলে) বোতাম আগের অবস্থায়
         // App info থেকে ফিরলে (ব্যবহারকারীর নিজের চাপের পরে) একবার সংশ্লিষ্ট সেটিংস পাতা আবার খুলে দেয়
         val pend = Store.sp(this).getString("info_for", "") ?: ""
@@ -727,7 +728,7 @@ class MainActivity : Activity() {
             box.addView(tv("এখনো কোনো মেসেজের নোটিফিকেশন আসেনি", 13f, mute))
             return
         }
-        val done = raw == "মেসেজ গিয়েছে"
+        val done = raw.endsWith("মেসেজ গিয়েছে")
         val head = SpannableStringBuilder("● ")
         head.setSpan(ForegroundColorSpan(if (done) accent else warn), 0, 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
         head.append(raw)
