@@ -365,7 +365,7 @@ class MainActivity : Activity() {
         Thread {
             val inst = packageManager.packageInstaller
             val p = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)
-            if (Build.VERSION.SDK_INT >= 31) p.setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
+            if (Build.VERSION.SDK_INT >= 31) p.setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_REQUIRED) // নীরব ইনস্টল চাওয়া হয় না: কিছু ফোন সেটা আটকে INSTALL_FAILED_ABORTED দেয়
             val id = inst.createSession(p)
             try {
                 val s = inst.openSession(id)

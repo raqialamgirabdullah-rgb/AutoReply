@@ -1,5 +1,8 @@
 package com.rahcare.autoreply
 
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -23,9 +26,23 @@ class UpdateReceiver : BroadcastReceiver() {
                 }
             }
             PackageInstaller.STATUS_SUCCESS -> {}
-            else -> Toast.makeText(
-                c, "আপডেট হয়নি: " + (i.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: ""), Toast.LENGTH_LONG
-            ).show()
+            else -> {
+                val msg = i.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: ""
+                Store.ev(c, "আপডেট ব্যর্থ: $msg")
+                Toast.makeText(c, "আপডেট হয়নি: $msg", Toast.LENGTH_LONG).show()
+                // টোস্টে লেখা কেটে যায়, তাই পুরো বার্তা নোটিফিকেশনেও দেখানো হয়
+                try {
+                    val nm = c.getSystemService(NotificationManager::class.java)
+                    nm.createNotificationChannel(NotificationChannel("update", "AutoReply আপডেট", NotificationManager.IMPORTANCE_DEFAULT))
+                    nm.notify(9, Notification.Builder(c, "update")
+                        .setSmallIcon(android.R.drawable.stat_notify_error)
+                        .setContentTitle("আপডেট হয়নি")
+                        .setContentText(msg)
+                        .setStyle(Notification.BigTextStyle().bigText(msg))
+                        .setAutoCancel(true)
+                        .build())
+                } catch (e: Exception) {}
+            }
         }
     }
 }
