@@ -1,5 +1,7 @@
 package com.rahcare.autoreply
 
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
 import android.app.Activity
 import android.app.AlertDialog
 import android.Manifest
@@ -173,8 +175,11 @@ class MainActivity : Activity() {
             elevation = d(6).toFloat()
             visibility = View.GONE
         }
+        // স্ক্রিন চার ভাগ: ডানের এক ভাগ + বোতামের, বাঁয়ের তিন ভাগে আপডেট বোতাম মাঝখানে (ডান মার্জিন দিয়ে সেই তিন ভাগের মাঝে রাখা হয়)
         frame.addView(updBtn, FrameLayout.LayoutParams(wc, d(52), Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply {
             bottomMargin = d(27)
+            leftMargin = d(16)
+            rightMargin = updRight()
         })
         editPage = FrameLayout(this).apply {
             setBackgroundColor(Color.parseColor("#0B0F14"))
@@ -325,15 +330,43 @@ class MainActivity : Activity() {
         }.start()
     }
 
+    // ডানের এক ভাগ (অন্তত + বোতামের জায়গা) বাদ দিয়ে বাঁয়ের তিন ভাগ
+    private fun updRight() = maxOf(resources.displayMetrics.widthPixels / 4, d(90))
+    private fun updFullW() = resources.displayMetrics.widthPixels - updRight() - d(16)
+    private var updAnim: ValueAnimator? = null
+
+    // আপডেট বোতামের প্রস্থ মাঝখান থেকে দুদিকে বাড়ায়/কমায়; wrap = true হলে শেষে আবার লেখা অনুযায়ী প্রস্থ
+    private fun animUpdWidth(to: Int, wrap: Boolean) {
+        updAnim?.cancel()
+        val lp = updBtn.layoutParams as FrameLayout.LayoutParams
+        val from = if (updBtn.width > 0) updBtn.width else to
+        if (updBtn.visibility != View.VISIBLE || from == to) {
+            lp.width = if (wrap) ViewGroup.LayoutParams.WRAP_CONTENT else to
+            updBtn.layoutParams = lp
+            return
+        }
+        updAnim = ValueAnimator.ofInt(from, to).apply {
+            duration = 260
+            addUpdateListener { lp.width = it.animatedValue as Int; updBtn.layoutParams = lp }
+            addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(a: Animator) {
+                    lp.width = if (wrap) ViewGroup.LayoutParams.WRAP_CONTENT else to
+                    updBtn.layoutParams = lp
+                }
+            })
+            start()
+        }
+    }
+
     private fun startUpd() {
         updBusy = true
         updStage = 1
         updPct = 0
-        updBtn.minWidth = d(250)
         updBtn.setTextColor(Color.WHITE)
         updBtn.setShadowLayer(d(3).toFloat(), 0f, 0f, Color.parseColor("#CC000000"))
         updBtn.text = "Downloading… 0%"
         updBtn.invalidate()
+        animUpdWidth(updFullW(), false) // বাঁয়ের তিন ভাগ জুড়ে বাড়ে; + বোতাম যেখানে ছিল সেখানেই
     }
 
     private fun setUpd(pct: Int, label: String) {
@@ -346,11 +379,13 @@ class MainActivity : Activity() {
         updBusy = false
         updStage = 0
         updPct = -1
-        updBtn.minWidth = 0
         updBtn.setTextColor(Color.parseColor("#06201C"))
         updBtn.setShadowLayer(0f, 0f, 0f, 0)
         updBtn.text = if (packageManager.canRequestPackageInstalls()) "Update" else "Allow update"
         updBtn.invalidate()
+        // লেখা অনুযায়ী ছোট প্রস্থ মেপে মাঝখানে ফিরে আসে
+        updBtn.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED)
+        animUpdWidth(updBtn.measuredWidth, true)
     }
 
     // APK নামিয়ে PackageInstaller দিয়ে ইনস্টল করে; ফোন নিশ্চিত করার পর্দা দেখাবে
