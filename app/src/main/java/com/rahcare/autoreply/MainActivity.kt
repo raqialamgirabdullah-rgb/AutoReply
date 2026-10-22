@@ -990,7 +990,10 @@ class MainActivity : Activity() {
         val ver = card()
         @Suppress("DEPRECATION")
         val vName = packageManager.getPackageInfo(packageName, 0).versionName ?: "1.0"
-        title(ver, "Version $vName.${Updater.curVer(c)}")
+        // সংস্করণের লেখা কার্ডের মাঝখানে
+        val vt = tv("Version $vName.${Updater.curVer(c)}", 17f, bold = true)
+        vt.gravity = Gravity.CENTER
+        addTo(ver, vt, 0)
         addTo(ver, ghost("Auto Reply শেয়ার করুন") { shareApp() }, 12)
         addSide(ver, 14)
     }
