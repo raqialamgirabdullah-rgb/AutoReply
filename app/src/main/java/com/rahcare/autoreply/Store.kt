@@ -79,9 +79,13 @@ object Store {
     }
     fun setGrpOn(c: Context, g: String, v: Boolean) = p(c).edit().putBoolean("grp_$g", v).apply()
 
+    // দলের ভেতরে প্রতিটি আলাদা ভেরিয়েন্ট (সাধারণ/Business/ক্লোন...) এর নিজস্ব সুইচ; ডিফল্ট চালু। কার্যকর = দলের সুইচ চালু এবং ভেরিয়েন্ট চালু
+    fun varOn(c: Context, pkg: String, uid: Int) = p(c).getBoolean("var_$pkg@$uid", true)
+    fun setVarOn(c: Context, pkg: String, uid: Int, v: Boolean) = p(c).edit().putBoolean("var_$pkg@$uid", v).apply()
+
     // চেনা অ্যাপ দলের সুইচ অনুযায়ী; অচেনা অ্যাপ ব্যবহারকারী নিজে টিক না দিলে বন্ধ
     fun instOn(c: Context, pkg: String, uid: Int): Boolean {
-        grp(pkg)?.let { return grpOn(c, it) }
+        grp(pkg)?.let { return grpOn(c, it) && varOn(c, pkg, uid) }
         return p(c).getBoolean("inst_$pkg@$uid", false)
     }
     fun setInstOn(c: Context, pkg: String, uid: Int, v: Boolean) {

@@ -578,9 +578,59 @@ class MainActivity : Activity() {
         }
     }
 
+    // একটা দলের (WhatsApp/Facebook/Telegram) সব ভেরিয়েন্ট: ফোনে ইনস্টল থাকা + যেগুলো থেকে নোটিফিকেশন এসেছে (ক্লোন/ডুয়াল সহ)
+    private fun variantsOf(g: String): List<Triple<String, Int, String>> {
+        val out = LinkedHashMap<String, Triple<String, Int, String>>()
+        fun nameOf(pkg: String, uid: Int): String {
+            val base = Store.APPS[pkg] ?: try {
+                packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString()
+            } catch (e: Exception) { pkg }
+            return if (uid != 0) "$base (ইউজার $uid)" else base
+        }
+        @Suppress("DEPRECATION")
+        val ris = try {
+            packageManager.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0)
+        } catch (e: Exception) { emptyList() }
+        for (ri in ris) {
+            val pkg = ri.activityInfo.packageName
+            if (Store.grp(pkg) == g && !Store.ignored(pkg)) out.putIfAbsent("$pkg@0", Triple(pkg, 0, nameOf(pkg, 0)))
+        }
+        for (i in Store.insts(this)) {
+            if (Store.grp(i.pkg) == g) out.putIfAbsent("${i.pkg}@${i.uid}", Triple(i.pkg, i.uid, nameOf(i.pkg, i.uid)))
+        }
+        return out.values.sortedBy { it.third.lowercase() }
+    }
+
+    // দলের নামে চাপলে খোলে: ওই দলের প্রতিটি ভেরিয়েন্টের পাশে আলাদা সুইচ
+    private fun variantsDialog(g: String) {
+        val list = variantsOf(g)
+        val dlg = AlertDialog.Builder(this).create()
+        val box = LinearLayout(this)
+        box.orientation = LinearLayout.VERTICAL
+        box.background = rounded(panel, 24, line)
+        box.setPadding(d(20), d(20), d(20), d(18))
+        addTo(box, tv(g, 18f, bold = true), 0)
+        val sub = if (list.isEmpty()) "এই ফোনে এই অ্যাপের কোনো ভেরিয়েন্ট পাওয়া যায়নি। কোনো কপি থেকে প্রথম নোটিফিকেশন এলে এখানে দেখা যাবে।"
+        else "প্রতিটি ভেরিয়েন্ট আলাদা করে চালু বা বন্ধ করা যায়। ওপরের মূল সুইচ বন্ধ থাকলে কোনোটিই চলবে না।"
+        addTo(box, tv(sub, 12f, mute), 4)
+        for ((pkg, uid, name) in list) {
+            val pk: String? = if (Store.APPS.containsKey(pkg)) null else pkg
+            addTo(box, swRow(name, pk, Store.varOn(this, pkg, uid)) { v -> Store.setVarOn(this, pkg, uid, v) }, 14)
+        }
+        addTo(box, ghost("ঠিক আছে") { dlg.dismiss() }, 16)
+        val sv = ScrollView(this)
+        sv.isVerticalScrollBarEnabled = false
+        sv.addView(box)
+        dlg.setView(sv)
+        dlg.show()
+        dlg.window?.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(Color.TRANSPARENT))
+        dlg.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+    }
+
     // সাইডবারের অ্যাপের ঘর (দুই কলামের গ্রিডের জন্য): ওপরে নাম, নিচে খুঁটিনাটি, সবার নিচে অবস্থা ও সুইচ
-    private fun swCell(t: String, details: List<String>, on: Boolean, f: (Boolean) -> Unit): LinearLayout {
+    private fun swCell(t: String, details: List<String>, on: Boolean, onTap: (() -> Unit)? = null, f: (Boolean) -> Unit): LinearLayout {
         val r = LinearLayout(this)
+        if (onTap != null) r.setOnClickListener { onTap() }
         r.orientation = LinearLayout.VERTICAL
         r.gravity = Gravity.CENTER_HORIZONTAL
         r.background = rounded(panel, 16, line)
@@ -881,14 +931,14 @@ class MainActivity : Activity() {
         // অ্যাপ/কপির তালিকা (দুই কলামের গ্রিড)
         val apps = section()
         title(apps, "কোন অ্যাপে চলবে")
-        bullets(apps, listOf("প্রতিটি অ্যাপ আলাদা করে চালু বা বন্ধ করা যায়"), 6)
+        bullets(apps, listOf("প্রতিটি অ্যাপ আলাদা করে চালু বা বন্ধ করা যায়", "নামে চাপলে ওই অ্যাপের সব ভেরিয়েন্ট (Business, ক্লোন...) আলাদা সুইচসহ দেখা যায়"), 6)
         val cells = ArrayList<View>()
         val fmt = SimpleDateFormat("dd MMM HH:mm", Locale.US)
         val shownG = HashSet<String>()
         for (pkg in Store.APPS.keys) {
             val g = Store.grp(pkg) ?: continue
             if (!shownG.add(g)) continue
-            cells.add(swCell(g, emptyList(), Store.grpOn(c, g)) { v -> Store.setGrpOn(c, g, v) })
+            cells.add(swCell(g, listOf("ভেরিয়েন্ট দেখুন ›"), Store.grpOn(c, g), { variantsDialog(g) }) { v -> Store.setGrpOn(c, g, v) })
         }
         val shown = HashSet<String>()
         for (i in Store.insts(c)) {
