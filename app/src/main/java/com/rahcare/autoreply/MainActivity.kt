@@ -635,7 +635,7 @@ class MainActivity : Activity() {
     private fun groupIcon(g: String, sizeDp: Int = 40): View {
         val prefer = when (g) {
             "WhatsApp" -> listOf("com.whatsapp", "com.whatsapp.w4b")
-            "Facebook" -> listOf("com.facebook.katana", "com.facebook.orca", "com.facebook.lite", "com.facebook.pages.app")
+            "Facebook" -> listOf("com.facebook.katana", "com.facebook.orca", "com.facebook.pages.app")
             "Telegram" -> listOf("org.telegram.messenger", "org.telegram.messenger.web")
             else -> emptyList()
         }

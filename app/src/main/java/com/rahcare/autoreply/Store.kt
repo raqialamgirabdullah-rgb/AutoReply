@@ -20,7 +20,6 @@ object Store {
         "com.whatsapp" to "WhatsApp",
         "com.whatsapp.w4b" to "WhatsApp Business",
         "com.facebook.orca" to "Messenger",
-        "com.facebook.lite" to "Facebook Lite",
         "com.facebook.pages.app" to "Meta Business Suite",
         "org.telegram.messenger" to "Telegram"
     )
@@ -41,7 +40,7 @@ object Store {
         return when {
             l.contains("w4b") -> "WhatsApp Business"
             l.contains("whatsapp") -> "WhatsApp"
-            l.startsWith("com.facebook.orca") || l.startsWith("com.facebook.lite") || l.startsWith("com.facebook.pages.app") -> "Facebook" // Messenger, Facebook Lite ও Meta Business Suite (ক্লোনসহ) সব এক
+            l.startsWith("com.facebook.orca") || l.startsWith("com.facebook.pages.app") -> "Facebook" // Messenger ও Meta Business Suite (ক্লোনসহ) সব এক
             l.startsWith("org.telegram.messenger") -> "Telegram"
             else -> null
         }
@@ -56,7 +55,7 @@ object Store {
         return if (parts.isEmpty()) base else "$base (${parts.joinToString(", ")})"
     }
 
-    // একই সুইচে চলা দল: WhatsApp (Business ও ক্লোনসহ) = "WhatsApp"; Messenger ও Facebook Lite (ক্লোনসহ) = "Facebook"; অচেনা অ্যাপ হলে null
+    // একই সুইচে চলা দল: WhatsApp (Business ও ক্লোনসহ) = "WhatsApp"; Messenger ও Meta Business Suite (ক্লোনসহ) = "Facebook"; অচেনা অ্যাপ হলে null
     fun grp(pkg: String): String? = family(pkg)?.let { if (it == "WhatsApp Business") "WhatsApp" else it }
 
     // আগের আলাদা আলাদা সেটিং (থাকলে); নতুন দলের সুইচ প্রথমবার আগের পছন্দ থেকে শুরু হয়
@@ -97,8 +96,8 @@ object Store {
     class Inst(val pkg: String, val uid: Int, var t: Long)
     private val touched = HashMap<String, Long>()
 
-    // যে অ্যাপগুলো একেবারেই বাদ (তালিকায় আসে না, উত্তরও যায় না): IMO-তে Reply বাটন নেই
-    fun ignored(pkg: String) = pkg.startsWith("com.imo.")
+    // যে অ্যাপগুলো একেবারেই বাদ (তালিকায় আসে না, উত্তরও যায় না): IMO-তে Reply বাটন নেই; Facebook Lite সরানো হয়েছে
+    fun ignored(pkg: String) = pkg.startsWith("com.imo.") || pkg.startsWith("com.facebook.lite")
 
     fun insts(c: Context): MutableList<Inst> {
         val s = p(c).getString("insts", null) ?: return mutableListOf()
