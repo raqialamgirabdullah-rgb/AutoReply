@@ -98,6 +98,9 @@ object Updater {
 
     // APK নামিয়ে PackageInstaller-এ জমা দেয়। silent = true হলে (Android 12+) ফোন অনুমতি দিলে নিশ্চিত-পর্দা ছাড়াই বসে;
     // না দিলে UpdateReceiver নিশ্চিত-পর্দা চায়। ব্যর্থ হলে ব্যতিক্রম ছোঁড়ে।
+    // বাতিল বা ব্যর্থ হলে সামনের পর্দা বোতাম আগের অবস্থায় ফেরায়
+    @Volatile var onInstallFail: (() -> Unit)? = null
+
     fun installNow(c: Context, url: String, silent: Boolean, onPct: (Int) -> Unit, onCommit: () -> Unit) {
         val inst = c.packageManager.packageInstaller
         val p = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)

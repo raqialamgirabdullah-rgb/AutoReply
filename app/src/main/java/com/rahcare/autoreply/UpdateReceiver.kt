@@ -37,6 +37,7 @@ class UpdateReceiver : BroadcastReceiver() {
             else -> {
                 val msg = i.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: ""
                 Store.ev(c, "আপডেট ব্যর্থ: $msg")
+                try { Updater.onInstallFail?.invoke() } catch (e: Exception) {}
                 Store.sp(c).edit().putBoolean("inst_pending", true).apply()
                 if (i.getBooleanExtra("silent", false)) Updater.noteSilentFail(c)
                 if (Updater.fg) Toast.makeText(c, "আপডেট হয়নি: $msg", Toast.LENGTH_LONG).show()

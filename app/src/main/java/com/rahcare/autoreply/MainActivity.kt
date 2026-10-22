@@ -280,7 +280,8 @@ class MainActivity : Activity() {
         super.onResume()
         Updater.fg = true
         Store.log(this) // অ্যাপ খুললেই পুরোনো লগের (মেসেজের লেখাসহ) বাকি অংশ মুছে যায়
-        if (updStage == 2) resetUpd() // ইনস্টল নিশ্চিতকরণের পর্দা থেকে ফিরলে (বাতিল করলে) বোতাম আগের অবস্থায়
+        // নিশ্চিতকরণের পর্দা থেকে ফিরলেই বোতাম "Update" করা হয় না (ইনস্টল তখনও চলছে); বাতিল/ব্যর্থ হলে UpdateReceiver জানায়
+        Updater.onInstallFail = { runOnUiThread { if (updBusy) resetUpd() } }
         // App info থেকে ফিরলে (ব্যবহারকারীর নিজের চাপের পরে) একবার সংশ্লিষ্ট সেটিংস পাতা আবার খুলে দেয়
         val pend = Store.sp(this).getString("info_for", "") ?: ""
         if (pend.isNotEmpty()) {
@@ -422,7 +423,7 @@ class MainActivity : Activity() {
                         runOnUiThread {
                             updStage = 2
                             setUpd(100, "Installing…")
-                            handler.postDelayed({ if (updStage == 2) resetUpd() }, 60000L)
+                            handler.postDelayed({ if (updStage == 2) resetUpd() }, 180000L)
                         }
                     })
             } catch (e: Exception) {
