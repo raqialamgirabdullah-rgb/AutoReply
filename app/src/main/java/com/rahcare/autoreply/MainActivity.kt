@@ -906,9 +906,6 @@ class MainActivity : Activity() {
         grid(apps, cells, 12, 3)
         addSide(apps, 14)
 
-        // ডেভ চ্যাট: অ্যাপের ভেতর থেকে Gemini এজেন্টকে কাজ বলা
-        addSide(ghost("ডেভ চ্যাট — অ্যাপে কাজ বলুন") { startActivity(Intent(this, DevChatActivity::class.java)) }, 14)
-
         // সংস্করণ (আপডেটের বোতাম শুধু মূল পাতায়; সাইডবারে কেবল সংস্করণ দেখায়)
         val ver = card()
         title(ver, "সংস্করণ ${Updater.curVer(c)}")

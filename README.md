@@ -11,10 +11,6 @@ Optional AI chat: if you switch on "AI স্বয়ংক্রিয় চ�
 rule are answered by the AI provider you chose (Claude / Anthropic, or any OpenAI-compatible API). Only the message text (no name or number) is sent
 to that provider, and the key is stored on the phone only.
 
-Optional "ডেভ চ্যাট" (developer chat): if you paste a fine-grained GitHub token (Issues: read and write, this repository only), the app can post
-"@gemini-cli <task>" comments on one GitHub issue and show the agent's replies. The token is encrypted with the Android Keystore and used only for
-`api.github.com`.
-
 ## ইনস্টল করার নিয়ম (Install guide)
 
 এই অ্যাপ Google Play থেকে নয়, সরাসরি APK ফাইল থেকে ইনস্টল হয়। তাই ফোন কয়েকটা সতর্কবার্তা দেখাতে পারে। এগুলো ফোনের নিরাপত্তা-ব্যবস্থা, সাধারণ ব্যাপার।
