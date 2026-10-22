@@ -993,7 +993,7 @@ class MainActivity : Activity() {
         for (ri in launchers) {
             val pkg = ri.activityInfo.packageName
             if (pkg == packageName || Store.grp(pkg) != null || Store.ignored(pkg) || pkg == "com.facebook.katana") continue
-            val social = Store.KNOWN_CHAT.containsKey(pkg) || ri.activityInfo.applicationInfo.category == ApplicationInfo.CATEGORY_SOCIAL
+            val social = Store.KNOWN_CHAT.containsKey(pkg)
             if (!social || others.any { it.first == pkg }) continue
             val label = try { ri.loadLabel(packageManager).toString() } catch (e: Exception) { Store.KNOWN_CHAT[pkg] ?: pkg }
             others.add(pkg to label)
@@ -1006,7 +1006,7 @@ class MainActivity : Activity() {
 
         // নোটিফিকেশন-ওয়ালা অন্য কপি/অচেনা অ্যাপ (ডুয়াল অ্যাপ, ওয়ার্ক প্রোফাইল ইত্যাদি) যেগুলো ওপরে আসেনি
         for (i in Store.insts(c)) {
-            if (Store.grp(i.pkg) != null || "${i.pkg}@${i.uid}" in shown) continue
+            if (Store.grp(i.pkg) != null || "${i.pkg}@${i.uid}" in shown || !Store.KNOWN_CHAT.containsKey(i.pkg)) continue
             shown.add("${i.pkg}@${i.uid}")
             val nm = try { packageManager.getApplicationLabel(packageManager.getApplicationInfo(i.pkg, 0)).toString() } catch (e: Exception) { "" }
             val det = ArrayList<String>()
