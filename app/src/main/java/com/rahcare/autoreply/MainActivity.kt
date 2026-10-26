@@ -264,9 +264,6 @@ class MainActivity : Activity() {
     private fun openMenu() {
         if (menuOpen) return
         menuOpen = true
-        // সাইডবার খোলা থাকার সময় + ও আপডেট বোতামের ছায়া/উচ্চতা শূন্য: সাইডবারের নিচে ঢাকা পড়ে, বাকি অংশে স্ক্রিমের ছায়া পড়ে
-        fabV.elevation = 0f
-        updBtn.elevation = 0f
         scrim.alpha = 0f
         scrim.visibility = View.VISIBLE
         scrim.animate().alpha(1f).setDuration(180).start()
@@ -278,7 +275,6 @@ class MainActivity : Activity() {
     private fun closeMenu() {
         if (!menuOpen) return
         menuOpen = false
-        fabV.postDelayed({ if (!menuOpen) { fabV.elevation = d(6).toFloat(); updBtn.elevation = d(6).toFloat() } }, 200)
         scrim.animate().alpha(0f).setDuration(160).withEndAction { if (!menuOpen) scrim.visibility = View.GONE }.start()
         sideBox.animate().translationX(-sideW().toFloat()).setDuration(180).withEndAction { if (!menuOpen) sideBox.visibility = View.GONE }.start()
     }
